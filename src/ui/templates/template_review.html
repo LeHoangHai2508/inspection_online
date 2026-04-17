@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Template Review{% endblock %}
+{% block scripts %}<script src="/static/js/template_review.js"></script>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Template Review</h1>
+  <span class="badge badge-{{ template.status | lower }}">{{ template.status }}</span>
+</div>
+
+<div class="two-col">
+  <!-- Left: images -->
+  <div class="col-images">
+    <h3>Side 1</h3>
+    {% if preview.original_file_paths.side1 %}
+      <img src="/storage/{{ preview.original_file_paths.side1 }}" alt="side1" class="template-img" />
+    {% else %}
+      <div class="img-placeholder">Không có ảnh</div>
+    {% endif %}
+
+    <h3>Side 2</h3>
+    {% if preview.original_file_paths.side2 %}
+      <img src="/storage/{{ preview.original_file_paths.side2 }}" alt="side2" class="template-img" />
+    {% else %}
+      <div class="img-placeholder">Không có ảnh</div>
+    {% endif %}
+  </div>
+
+  <!-- Right: OCR + fields -->
+  <div class="col-review">
+    <h3>OCR Text</h3>
+    <div class="ocr-panel">
+      <strong>Side1</strong>
+      <pre class="ocr-text">{{ preview.side1_raw_text or '(empty)' }}</pre>
+      <strong>Side2</strong>
+      <pre class="ocr-text">{{ preview.side2_raw_text or '(empty)' }}</pre>
+    </div>
+
+    {% if preview.unmapped_blocks.side1 or preview.unmapped_blocks.side2 %}
+    <div class="alert alert-warn">
+      Có block chưa map — kiểm tra lại trước khi approve.
+    </div>
+    {% endif %}
+
+    <h3>Fields</h3>
+    <form id="field-form" method="POST" action="/templates/{{ template.template_id }}/fields">
+      <table class="data-table" id="fields-table">
+        <thead>
+          <tr>
+            <th>Side</th>
+            <th>Field Name</th>
+            <th>Expected Value</th>
+            <th>Compare Type</th>
+            <th>Priority</th>
+            <th>Required</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for side_key in ['side1', 'side2'] %}
+            {% for f in preview.fields_by_side[side_key] %}
+            <tr>
+              <td>{{ side_key }}</td>
+              <td><input name="field_name[]" value="{{ f.field_name }}" class="input-sm" /></td>
+              <td><input name="expected_value[]" value="{{ f.expected_value }}" class="input-sm" /></td>
+              <td>
+                <select name="compare_type[]" class="select-sm">
+                  {% for ct in ['exact','regex','fuzzy','symbol_match'] %}
+                  <option value="{{ ct }}" {% if f.compare_type == ct %}selected{% endif %}>{{ ct }}</option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td>
+                <select name="priority[]" class="select-sm">
+                  {% for p in ['critical','major','minor'] %}
+                  <option value="{{ p }}" {% if f.priority == p %}selected{% endif %}>{{ p }}</option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td><input type="checkbox" name="required[]" {% if f.required %}checked{% endif %} /></td>
+              <td><button type="button" class="btn btn-sm btn-danger" onclick="removeRow(this)">✕</button></td>
+            </tr>
+            {% endfor %}
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" onclick="addFieldRow()">+ Add Field</button>
+        <button type="submit" class="btn btn-primary">Save Fields</button>
+      </div>
+    </form>
+
+    <div class="approve-section">
+      <form method="POST" action="/templates/{{ template.template_id }}/approve">
+        <input name="approved_by" placeholder="Approved by" class="input-sm" required />
+        <button type="submit" class="btn btn-success">Approve Template</button>
+      </form>
+      <form method="POST" action="/templates/{{ template.template_id }}/reject" style="display:inline">
+        <button type="submit" class="btn btn-danger">Reject</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

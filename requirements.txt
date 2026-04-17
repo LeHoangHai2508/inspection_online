@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+python-multipart
+opencv-python
+pillow
+rapidfuzz
+paddleocr
+pymysql
+alembic
+pytest
+streamlit
+pyyaml
+jinja2
+aiofiles

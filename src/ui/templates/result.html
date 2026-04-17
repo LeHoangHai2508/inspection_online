@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Result — {{ result.scan_job_id }}{% endblock %}
+{% block scripts %}<script src="/static/js/result.js"></script>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Kết quả kiểm tra</h1>
+  <span class="text-muted">{{ result.scan_job_id }}</span>
+</div>
+
+<!-- Overall -->
+<div class="overall-panel status-{{ result.overall_status | lower }}">
+  <div class="overall-status">{{ result.overall_status }}</div>
+  <div class="overall-action">{{ result.operator_action_required }}</div>
+  <div class="overall-severity">Severity: {{ result.highest_severity or '—' }}</div>
+</div>
+
+<div class="two-col">
+  <!-- Side 1 -->
+  <div class="side-panel">
+    <h2>Side 1 — <span class="badge badge-{{ result.side1_result.status | lower }}">{{ result.side1_result.status }}</span></h2>
+    <p class="proc-time">{{ result.side1_result.processing_time_ms }} ms</p>
+
+    <div class="capture-grid">
+      {% if result.side1_result.annotated_assets.cam1 %}
+      <img src="/storage/{{ result.side1_result.annotated_assets.cam1 }}" class="result-img" alt="side1 cam1" />
+      {% endif %}
+      {% if result.side1_result.annotated_assets.cam2 %}
+      <img src="/storage/{{ result.side1_result.annotated_assets.cam2 }}" class="result-img" alt="side1 cam2" />
+      {% endif %}
+    </div>
+
+    {% if result.side1_result.errors %}
+    <table class="data-table">
+      <thead><tr><th>Field</th><th>Error</th><th>Severity</th><th>Expected</th><th>Actual</th></tr></thead>
+      <tbody>
+        {% for err in result.side1_result.errors %}
+        <tr class="row-{{ err.severity }}">
+          <td>{{ err.field_name }}</td>
+          <td>{{ err.error_type }}</td>
+          <td><span class="badge badge-{{ err.severity }}">{{ err.severity }}</span></td>
+          <td>{{ err.expected_value or '—' }}</td>
+          <td>{{ err.actual_value or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-ok">Không có lỗi.</p>
+    {% endif %}
+  </div>
+
+  <!-- Side 2 -->
+  <div class="side-panel">
+    <h2>Side 2 — <span class="badge badge-{{ result.side2_result.status | lower }}">{{ result.side2_result.status }}</span></h2>
+    <p class="proc-time">{{ result.side2_result.processing_time_ms }} ms</p>
+
+    <div class="capture-grid">
+      {% if result.side2_result.annotated_assets.cam1 %}
+      <img src="/storage/{{ result.side2_result.annotated_assets.cam1 }}" class="result-img" alt="side2 cam1" />
+      {% endif %}
+      {% if result.side2_result.annotated_assets.cam2 %}
+      <img src="/storage/{{ result.side2_result.annotated_assets.cam2 }}" class="result-img" alt="side2 cam2" />
+      {% endif %}
+    </div>
+
+    {% if result.side2_result.errors %}
+    <table class="data-table">
+      <thead><tr><th>Field</th><th>Error</th><th>Severity</th><th>Expected</th><th>Actual</th></tr></thead>
+      <tbody>
+        {% for err in result.side2_result.errors %}
+        <tr class="row-{{ err.severity }}">
+          <td>{{ err.field_name }}</td>
+          <td>{{ err.error_type }}</td>
+          <td><span class="badge badge-{{ err.severity }}">{{ err.severity }}</span></td>
+          <td>{{ err.expected_value or '—' }}</td>
+          <td>{{ err.actual_value or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-ok">Không có lỗi.</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="back-link">
+  <a href="/history" class="btn btn-secondary">← Lịch sử</a>
+  <a href="/" class="btn btn-secondary">Dashboard</a>
+</div>
+{% endblock %}

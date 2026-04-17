@@ -1,0 +1,65 @@
+# Bộ symbol chăm sóc quần áo theo ISO 3758
+symbols:
+  wash:
+    label: "Giặt"
+    variants:
+      - code: W30
+        description: "Giặt máy 30°C"
+      - code: W40
+        description: "Giặt máy 40°C"
+      - code: W60
+        description: "Giặt máy 60°C"
+      - code: HAND_WASH
+        description: "Giặt tay"
+      - code: NO_WASH
+        description: "Không được giặt"
+
+  bleach:
+    label: "Tẩy"
+    variants:
+      - code: BLEACH_OK
+        description: "Được tẩy"
+      - code: NO_BLEACH
+        description: "Không được tẩy"
+      - code: NON_CHLORINE_BLEACH
+        description: "Chỉ dùng tẩy không chứa clo"
+
+  iron:
+    label: "Là (ủi)"
+    variants:
+      - code: IRON_LOW
+        description: "Là nhiệt độ thấp (110°C)"
+      - code: IRON_MED
+        description: "Là nhiệt độ trung bình (150°C)"
+      - code: IRON_HIGH
+        description: "Là nhiệt độ cao (200°C)"
+      - code: NO_IRON
+        description: "Không được là"
+
+  dry:
+    label: "Phơi / Sấy khô"
+    variants:
+      - code: DRY_FLAT
+        description: "Phơi nằm ngang"
+      - code: DRY_HANG
+        description: "Phơi treo"
+      - code: DRY_SHADE
+        description: "Phơi trong bóng râm"
+
+  tumble_dry:
+    label: "Sấy máy"
+    variants:
+      - code: TUMBLE_LOW
+        description: "Sấy máy nhiệt thấp"
+      - code: TUMBLE_MED
+        description: "Sấy máy nhiệt trung bình"
+      - code: NO_TUMBLE
+        description: "Không sấy máy"
+
+  dry_clean:
+    label: "Giặt khô"
+    variants:
+      - code: DRY_CLEAN
+        description: "Giặt khô được"
+      - code: NO_DRY_CLEAN
+        description: "Không giặt khô"

@@ -1,0 +1,45 @@
+errors:
+  TEXT_MISMATCH:
+    description: "OCR text không khớp với expected value trong template"
+    default_severity: major
+    applies_to: [text, mixed]
+
+  MISSING_FIELD:
+    description: "Field bắt buộc không tìm thấy trong ảnh runtime"
+    default_severity: critical
+    applies_to: [text, symbol, mixed]
+
+  EXTRA_FIELD:
+    description: "Field xuất hiện trong ảnh nhưng không có trong template"
+    default_severity: minor
+    applies_to: [text, symbol, mixed]
+
+  LAYOUT_MISMATCH:
+    description: "Vị trí hoặc thứ tự block không khớp với template"
+    default_severity: major
+    applies_to: [text, mixed]
+
+  SYMBOL_MISMATCH:
+    description: "Symbol giặt/bảo quản không khớp với template"
+    default_severity: critical
+    applies_to: [symbol, mixed]
+
+  LOW_PRINT_QUALITY:
+    description: "Ảnh rõ nhưng chữ/symbol in mờ, nhạt mực"
+    default_severity: major
+    applies_to: [text, symbol, mixed]
+
+  LOW_IMAGE_QUALITY:
+    description: "Ảnh mờ, tối, hoặc lỗi camera — không thể OCR tin cậy"
+    default_severity: major
+    applies_to: [text, symbol, mixed]
+
+  WRONG_TEMPLATE:
+    description: "Tem không khớp với template đã chọn"
+    default_severity: critical
+    applies_to: [text, symbol, mixed]
+
+  UNCERTAIN_RESULT:
+    description: "Không thể ra quyết định rõ ràng — cần kiểm tra thủ công"
+    default_severity: major
+    applies_to: [text, symbol, mixed]

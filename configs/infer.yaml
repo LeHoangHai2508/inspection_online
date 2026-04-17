@@ -1,0 +1,6 @@
+max_workers: 2
+ocr_timeout_sec: 5
+side_timeout_sec: 10
+batch_size: 1
+crop_enabled: true
+quality_gate_enabled: true

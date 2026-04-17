@@ -1,0 +1,6 @@
+mode: mock          # mock | http | mqtt
+endpoint: ""        # http: "http://iot-host/api/events" | mqtt: "mqtt://broker:1883"
+topic: "garment/inspection/result"
+timeout_sec: 5
+retry_max: 3
+retry_delay_sec: 2

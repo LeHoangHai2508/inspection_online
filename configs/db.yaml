@@ -1,0 +1,3 @@
+driver: sqlite
+path: data/sqlite/inspection.db
+schema: src/db/schema.sql

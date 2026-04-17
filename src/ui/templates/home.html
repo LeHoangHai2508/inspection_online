@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Garment Inspection{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Dashboard</h1>
+  <span class="badge badge-{{ line_status | lower }}">{{ line_status }}</span>
+</div>
+
+<!-- KPI cards -->
+<div class="kpi-grid">
+  <div class="kpi-card">
+    <div class="kpi-value">{{ summary.total }}</div>
+    <div class="kpi-label">Tổng kiểm</div>
+  </div>
+  <div class="kpi-card kpi-ok">
+    <div class="kpi-value">{{ summary.ok }}</div>
+    <div class="kpi-label">OK</div>
+  </div>
+  <div class="kpi-card kpi-ng">
+    <div class="kpi-value">{{ summary.ng }}</div>
+    <div class="kpi-label">NG</div>
+  </div>
+  <div class="kpi-card kpi-uncertain">
+    <div class="kpi-value">{{ summary.uncertain }}</div>
+    <div class="kpi-label">UNCERTAIN</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-value">{{ summary.error_rate_pct }}%</div>
+    <div class="kpi-label">Tỷ lệ lỗi</div>
+  </div>
+</div>
+
+<!-- Recent jobs table -->
+<section class="section">
+  <h2>10 lần kiểm gần nhất</h2>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Scan Job ID</th>
+        <th>Template</th>
+        <th>Line</th>
+        <th>Side1</th>
+        <th>Side2</th>
+        <th>Overall</th>
+        <th>Action</th>
+        <th>Thời gian</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for job in recent_jobs %}
+      <tr class="row-{{ job.overall_status | lower | default('pending') }}">
+        <td><a href="/result/{{ job.scan_job_id }}">{{ job.scan_job_id }}</a></td>
+        <td>{{ job.template_id }}</td>
+        <td>{{ job.line_id }}</td>
+        <td>{{ job.side1_status or '—' }}</td>
+        <td>{{ job.side2_status or '—' }}</td>
+        <td><span class="badge badge-{{ job.overall_status | lower | default('pending') }}">{{ job.overall_status or '—' }}</span></td>
+        <td>{{ job.operator_action_required or '—' }}</td>
+        <td>{{ job.created_at }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="empty">Chưa có dữ liệu.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

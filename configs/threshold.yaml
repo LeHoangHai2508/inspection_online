@@ -1,0 +1,6 @@
+blur_min: 80
+brightness_min: 50
+brightness_max: 220
+ocr_confidence_min: 0.75
+fuzzy_match_min: 0.85
+layout_iou_min: 0.5

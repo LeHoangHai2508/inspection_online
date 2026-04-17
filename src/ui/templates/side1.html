@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Inspect Side 1{% endblock %}
+{% block scripts %}<script src="/static/js/side1.js"></script>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Inspect Side 1</h1>
+</div>
+
+<form id="side1-form" enctype="multipart/form-data">
+  <div class="form-row">
+    <label>Scan Job ID
+      <input id="scan_job_id" name="scan_job_id" value="{{ scan_job_id }}" class="input-md" required />
+    </label>
+    <label>Template ID
+      <input id="template_id" name="template_id" value="{{ template_id }}" class="input-md" required />
+    </label>
+  </div>
+
+  <div class="capture-grid">
+    <div class="capture-slot">
+      <label>Cam 1</label>
+      <input type="file" id="cam1_file" name="cam1_file" accept="image/*" />
+      <img id="preview-cam1" class="capture-preview" />
+    </div>
+    <div class="capture-slot">
+      <label>Cam 2</label>
+      <input type="file" id="cam2_file" name="cam2_file" accept="image/*" />
+      <img id="preview-cam2" class="capture-preview" />
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button type="button" id="btn-inspect" class="btn btn-primary btn-lg" onclick="inspectSide1()">
+      Inspect Side 1
+    </button>
+    <button type="button" id="btn-live" class="btn btn-secondary btn-lg" onclick="inspectSide1Live()">
+      Live Camera
+    </button>
+  </div>
+</form>
+
+<div id="side1-result" class="result-panel hidden"></div>
+{% endblock %}

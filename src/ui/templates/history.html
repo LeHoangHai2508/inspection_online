@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}History{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Lịch sử kiểm tra</h1>
+</div>
+
+<!-- Filters -->
+<form method="GET" action="/history" class="filter-bar">
+  <input name="template_id" placeholder="Template ID" value="{{ filters.template_id or '' }}" class="input-sm" />
+  <select name="status" class="select-sm">
+    <option value="">Tất cả</option>
+    {% for s in ['OK','NG','UNCERTAIN'] %}
+    <option value="{{ s }}" {% if filters.status == s %}selected{% endif %}>{{ s }}</option>
+    {% endfor %}
+  </select>
+  <input name="date_from" type="date" value="{{ filters.date_from or '' }}" class="input-sm" />
+  <input name="date_to" type="date" value="{{ filters.date_to or '' }}" class="input-sm" />
+  <button type="submit" class="btn btn-primary">Lọc</button>
+  <a href="/history" class="btn btn-secondary">Reset</a>
+</form>
+
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>Scan Job ID</th>
+      <th>Template</th>
+      <th>Line</th>
+      <th>Side1</th>
+      <th>Side2</th>
+      <th>Overall</th>
+      <th>Action</th>
+      <th>Thời gian</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for job in jobs %}
+    <tr class="row-{{ job.overall_status | lower | default('pending') }}">
+      <td><a href="/result/{{ job.scan_job_id }}">{{ job.scan_job_id }}</a></td>
+      <td>{{ job.template_id }}</td>
+      <td>{{ job.line_id or '—' }}</td>
+      <td>{{ job.side1_status or '—' }}</td>
+      <td>{{ job.side2_status or '—' }}</td>
+      <td><span class="badge badge-{{ job.overall_status | lower | default('pending') }}">{{ job.overall_status or '—' }}</span></td>
+      <td>{{ job.operator_action_required or '—' }}</td>
+      <td>{{ job.created_at }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="8" class="empty">Không có dữ liệu.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

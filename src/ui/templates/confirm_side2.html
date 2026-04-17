@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Confirm Side 2{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Side 1 Done — Confirm Side 2</h1>
+</div>
+
+<div class="result-panel">
+  <div class="status-badge status-{{ result.status | lower }}">
+    {{ result.status }}
+  </div>
+
+  {% if result.errors %}
+  <h3>Lỗi Side 1 ({{ result.errors | length }})</h3>
+  <table class="data-table">
+    <thead>
+      <tr><th>Field</th><th>Error Type</th><th>Severity</th><th>Expected</th><th>Actual</th></tr>
+    </thead>
+    <tbody>
+      {% for err in result.errors %}
+      <tr class="row-{{ err.severity }}">
+        <td>{{ err.field_name }}</td>
+        <td>{{ err.error_type }}</td>
+        <td><span class="badge badge-{{ err.severity }}">{{ err.severity }}</span></td>
+        <td>{{ err.expected_value or '—' }}</td>
+        <td>{{ err.actual_value or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="text-ok">Side 1 không có lỗi.</p>
+  {% endif %}
+</div>
+
+<form method="POST" action="/inspect/{{ scan_job_id }}/confirm-side2">
+  <div class="confirm-box">
+    <p>Lật tem sang mặt 2 rồi nhấn xác nhận.</p>
+    <button type="submit" class="btn btn-primary btn-xl">
+      Xác nhận chuyển mặt 2
+    </button>
+  </div>
+</form>
+{% endblock %}

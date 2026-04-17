@@ -1,0 +1,8 @@
+app_name: garment_label_inspection
+env: local           # local | dev | prod
+host: 127.0.0.1
+port: 8000
+storage_root: storage
+enable_iot_mock: true
+# prod mode tự động bật strict_real_ocr và strict_camera
+# local/dev cho phép fallback mock

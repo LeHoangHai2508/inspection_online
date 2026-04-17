@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Inspect Side 2{% endblock %}
+{% block scripts %}<script src="/static/js/side2.js"></script>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Inspect Side 2</h1>
+</div>
+
+<form id="side2-form" enctype="multipart/form-data">
+  <input type="hidden" id="scan_job_id" name="scan_job_id" value="{{ scan_job_id }}" />
+  <input type="hidden" id="template_id" name="template_id" value="{{ template_id }}" />
+
+  <div class="capture-grid">
+    <div class="capture-slot">
+      <label>Cam 1</label>
+      <input type="file" id="cam1_file" name="cam1_file" accept="image/*" />
+      <img id="preview-cam1" class="capture-preview" />
+    </div>
+    <div class="capture-slot">
+      <label>Cam 2</label>
+      <input type="file" id="cam2_file" name="cam2_file" accept="image/*" />
+      <img id="preview-cam2" class="capture-preview" />
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button type="button" id="btn-inspect" class="btn btn-primary btn-lg" onclick="inspectSide2()">
+      Inspect Side 2
+    </button>
+    <button type="button" id="btn-live" class="btn btn-secondary btn-lg" onclick="inspectSide2Live()">
+      Live Camera
+    </button>
+  </div>
+</form>
+
+<div id="side2-result" class="result-panel hidden"></div>
+{% endblock %}
