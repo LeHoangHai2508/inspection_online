@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Template Upload{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Upload Template</h1>
+</div>
+
+<div class="card" style="max-width: 900px;">
+  <form id="template-upload-form" enctype="multipart/form-data">
+    <div class="form-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+      <div>
+        <label>Template Name</label>
+        <input type="text" name="template_name" class="input-sm" required />
+
+        <label style="margin-top:12px;">Product Code</label>
+        <input type="text" name="product_code" class="input-sm" required />
+
+        <label style="margin-top:12px;">Created By</label>
+        <input type="text" name="created_by" class="input-sm" value="operator_01" required />
+      </div>
+
+      <div>
+        <label>Side 1 File</label>
+        <input type="file" name="side1_file" accept="image/*,.pdf" required />
+
+        <label style="margin-top:12px;">Side 2 File</label>
+        <input type="file" name="side2_file" accept="image/*,.pdf" required />
+      </div>
+    </div>
+
+    <div style="margin-top:16px;">
+      <button type="submit" class="btn btn-primary">Upload</button>
+    </div>
+  </form>
+
+  <div id="upload-status" style="margin-top:12px;"></div>
+</div>
+
+<script>
+document.getElementById("template-upload-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const form = e.target;
+  const statusBox = document.getElementById("upload-status");
+  statusBox.innerHTML = "Đang upload và OCR...";
+
+  const fd = new FormData(form);
+
+  try {
+    const resp = await fetch("/api/templates/upload", {
+      method: "POST",
+      body: fd
+    });
+
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      throw new Error(data.detail || "Upload template thất bại.");
+    }
+
+    statusBox.innerHTML = `Upload xong. Template ID: <b>${data.template_id}</b>`;
+    window.location.href = `/templates/${data.template_id}/review`;
+  } catch (err) {
+    statusBox.innerHTML = `<span style="color:red;">${err.message}</span>`;
+  }
+});
+</script>
+{% endblock %}

@@ -6,6 +6,5 @@ storage/
 outputs/
 data/sqlite/*.db
 *.log
-data/datasets/00_external_raw/*
-!data/datasets/00_external_raw/ocr_chars_archive/
-!data/datasets/00_external_raw/ocr_chars_archive/*.zip
+data/datasets/00_external_raw/
+

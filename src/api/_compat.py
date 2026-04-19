@@ -1,8 +1,16 @@
 from __future__ import annotations
 
-
 try:
-    from fastapi import APIRouter, Depends, FastAPI, File, Form, HTTPException, UploadFile
+    from fastapi import (
+        APIRouter,
+        Depends,
+        FastAPI,
+        File,
+        Form,
+        HTTPException,
+        UploadFile,
+        Request,
+    )
     from fastapi.middleware.cors import CORSMiddleware
 except ImportError:  # pragma: no cover - fallback for environments without FastAPI
     class HTTPException(Exception):
@@ -11,7 +19,7 @@ except ImportError:  # pragma: no cover - fallback for environments without Fast
             self.status_code = status_code
             self.detail = detail
 
-    class UploadFile:  # type: ignore[override]
+    class UploadFile:
         filename: str
         content_type: str | None
 
@@ -36,7 +44,6 @@ except ImportError:  # pragma: no cover - fallback for environments without Fast
             def decorator(fn):
                 self.routes.append((args, kwargs, fn))
                 return fn
-
             return decorator
 
         get = post = put = _register
@@ -51,6 +58,9 @@ except ImportError:  # pragma: no cover - fallback for environments without Fast
         def add_middleware(self, *args, **kwargs) -> None:
             return None
 
+    class Request:
+        pass
+
     def Depends(dependency):
         return dependency
 
@@ -60,5 +70,5 @@ except ImportError:  # pragma: no cover - fallback for environments without Fast
     def Form(default=None):
         return default
 
-    class CORSMiddleware:  # pragma: no cover - compatibility shim
+    class CORSMiddleware:
         pass

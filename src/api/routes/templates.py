@@ -37,6 +37,9 @@ async def upload_template(
         record = container.template_service.create_draft(payload.to_command())
         return to_primitive(record)
     except Exception as exc:
+        import traceback
+        print(f"[ERROR] Upload template failed: {exc}")
+        print(traceback.format_exc())
         raise HTTPException(status_code=400, detail=str(exc))
 
 

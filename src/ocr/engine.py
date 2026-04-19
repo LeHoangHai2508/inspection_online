@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+# Set environment variables BEFORE any paddle imports
+os.environ['FLAGS_use_mkldnn'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 from src.domain.enums import InspectionSide
 from src.domain.models import OCRBlock, TemplateUploadFile
@@ -64,14 +69,14 @@ class PaddleOCREngine(BaseOCREngine):
     def __init__(self, lang: str = "en", use_angle_cls: bool = True) -> None:
         if importlib.util.find_spec("paddleocr") is None:
             raise RuntimeError("paddleocr is not installed.")
-
+        
         from paddleocr import PaddleOCR  # type: ignore
 
         self._ocr = PaddleOCR(use_angle_cls=use_angle_cls, lang=lang)
 
     def run(self, side: InspectionSide, file: TemplateUploadFile) -> OCRDocument:
         with _materialize_input(file) as input_path:
-            result = self._ocr.ocr(str(input_path), cls=True)
+            result = self._ocr.ocr(str(input_path))
         blocks = parse_paddle_output(result)
         return OCRDocument(
             side=side,

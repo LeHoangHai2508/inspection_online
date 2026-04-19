@@ -24,9 +24,13 @@ def create_app() -> FastAPI:
     # Serve static files (CSS / JS / images)
     try:
         from fastapi.staticfiles import StaticFiles
+        from src.utils.paths import STORAGE_ROOT
         static_dir = PROJECT_ROOT / "src" / "ui" / "static"
         if static_dir.exists():
             app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+        # Serve storage files (uploaded templates, captures, annotations)
+        if STORAGE_ROOT.exists():
+            app.mount("/storage", StaticFiles(directory=str(STORAGE_ROOT)), name="storage")
     except Exception:  # pragma: no cover
         pass
 

@@ -91,11 +91,11 @@
     </form>
 
     <div class="approve-section">
-      <form method="POST" action="/templates/{{ template.template_id }}/approve">
+      <form id="approve-form" method="POST" action="/api/templates/{{ template.template_id }}/approve">
         <input name="approved_by" placeholder="Approved by" class="input-sm" required />
         <button type="submit" class="btn btn-success">Approve Template</button>
       </form>
-      <form method="POST" action="/templates/{{ template.template_id }}/reject" style="display:inline">
+      <form id="reject-form" method="POST" action="/api/templates/{{ template.template_id }}/reject" style="display:inline">
         <button type="submit" class="btn btn-danger">Reject</button>
       </form>
     </div>

@@ -114,20 +114,12 @@ def template_upload_page(request: Request):
     2. Tạo template với status = DRAFT
     3. Redirect về trang review
     
-    Template: template_review.html (dùng chung với review page)
+    Template: template_upload.html
     
     Returns:
-        HTML form upload với preview rỗng
+        HTML form upload
     """
-    return _render(request, "template_review.html", {
-        "template": {"template_id": "", "status": "DRAFT"},
-        "preview": {
-            "side1_raw_text": "", "side2_raw_text": "",
-            "fields_by_side": {"side1": [], "side2": []},
-            "unmapped_blocks": {"side1": [], "side2": []},
-            "original_file_paths": {"side1": None, "side2": None},
-        },
-    })
+    return _render(request, "template_upload.html", {})
 
 
 @router.get("/templates/{template_id}/review", response_class=HTMLResponse if _JINJA_OK else None)

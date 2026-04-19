@@ -61,3 +61,54 @@ document.getElementById('field-form')?.addEventListener('submit', async (e) => {
     alert('Error: ' + err.message);
   }
 });
+
+// Helper function for form submission
+async function postForm(url, formDataObj) {
+  const body = new URLSearchParams(formDataObj);
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body,
+  });
+
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    throw new Error(data.detail || 'Request failed');
+  }
+  return data;
+}
+
+// Handle approve form
+document.getElementById('approve-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const approvedBy = form.querySelector('[name="approved_by"]').value;
+
+  try {
+    const data = await postForm(form.action, { approved_by: approvedBy });
+    alert('Approve thành công. Status: ' + (data.status || 'APPROVED'));
+    location.reload();
+  } catch (err) {
+    alert('Approve lỗi: ' + err.message);
+  }
+});
+
+// Handle reject form
+document.getElementById('reject-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.target;
+
+  try {
+    const resp = await fetch(form.action, { method: 'POST' });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      throw new Error(data.detail || 'Reject failed');
+    }
+    alert('Reject xong.');
+    location.reload();
+  } catch (err) {
+    alert('Reject lỗi: ' + err.message);
+  }
+});

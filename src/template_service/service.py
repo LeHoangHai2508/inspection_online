@@ -235,9 +235,12 @@ class TemplateService:
         )
         path = folder / filename
         path.write_bytes(content)
+        # Lưu relative path từ storage root thay vì absolute path
+        from src.utils.paths import STORAGE_ROOT
+        relative_path = path.relative_to(STORAGE_ROOT)
         return StoredFile(
             filename=filename,
-            storage_path=str(path),
+            storage_path=str(relative_path).replace("\\", "/"),  # Normalize path separators
             media_type=media_type,
         )
 
