@@ -5,3 +5,5 @@ __pycache__/
 storage/
 outputs/
 data/sqlite/*.db
+*.log
+data/datasets/00_external_raw/
