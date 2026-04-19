@@ -1,0 +1,2 @@
+product_code: SKU03
+composition: 100 COTTON

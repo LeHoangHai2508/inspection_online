@@ -1,0 +1,9 @@
+[
+  {
+    "field_name": "product_code",
+    "error_type": "TEXT_MISMATCH",
+    "expected_value": "SKU03",
+    "actual_value": "WRONG",
+    "severity": "critical"
+  }
+]

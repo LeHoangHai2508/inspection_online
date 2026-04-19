@@ -1,0 +1,7 @@
+{
+  "scan_job_id": "JOB_FILE_001",
+  "template_id": "DEMO_TEMPLATE_SKU02",
+  "overall_status": "OK",
+  "operator_action_required": "CONTINUE",
+  "highest_severity": null
+}

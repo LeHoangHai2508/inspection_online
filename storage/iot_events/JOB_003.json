@@ -1,0 +1,7 @@
+{
+  "scan_job_id": "JOB_003",
+  "template_id": "LABEL_A01_P001",
+  "overall_status": "NG",
+  "operator_action_required": "STOP_LINE",
+  "highest_severity": "critical"
+}

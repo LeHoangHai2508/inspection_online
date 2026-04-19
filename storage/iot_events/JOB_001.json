@@ -1,0 +1,7 @@
+{
+  "scan_job_id": "JOB_001",
+  "template_id": "LABEL_A01_P001",
+  "overall_status": "OK",
+  "operator_action_required": "CONTINUE",
+  "highest_severity": null
+}

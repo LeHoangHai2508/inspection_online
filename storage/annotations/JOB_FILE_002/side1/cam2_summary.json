@@ -1,0 +1,17 @@
+[
+  {
+    "field_name": "product_code",
+    "error_type": "TEXT_MISMATCH",
+    "expected_value": "SKU03",
+    "actual_value": "WRONG",
+    "severity": "critical",
+    "message": "Field value does not match approved template.",
+    "camera_source": "cam2",
+    "bbox": {
+      "x1": 0,
+      "y1": 20,
+      "x2": 400,
+      "y2": 38
+    }
+  }
+]
