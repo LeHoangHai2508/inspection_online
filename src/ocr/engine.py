@@ -85,13 +85,11 @@ class MockOCREngine(BaseOCREngine):
             return content.decode("utf-8", errors="ignore") or f"BINARY_FILE:{filename}"
 
 
-def _preprocess_for_tesseract(input_path: Path):
+def _preprocess_for_tesseract(input_path: Path, heavy: bool = True):
     """
-    Preprocess ảnh để cải thiện chất lượng OCR:
-    1. Upscale 2x để chữ nhỏ rõ hơn
-    2. CLAHE để tăng tương phản cục bộ
-    3. Otsu threshold để nhị phân hóa
-    4. Median blur để giảm nhiễu
+    Preprocess ảnh để cải thiện chất lượng OCR.
+    - heavy=False (side1): Không scale, chỉ CLAHE nhẹ
+    - heavy=True (side2): Scale 2x, CLAHE + threshold mạnh hơn
     """
     from PIL import Image  # type: ignore
 
@@ -99,29 +97,37 @@ def _preprocess_for_tesseract(input_path: Path):
     if image is None:
         raise RuntimeError(f"Cannot read image for OCR: {input_path}")
 
-    # 1) upscale để chữ nhỏ rõ hơn
-    image = cv2.resize(
-        image,
-        None,
-        fx=2.0,
-        fy=2.0,
-        interpolation=cv2.INTER_CUBIC,
-    )
-
-    # 2) tăng tương phản cục bộ
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    image = clahe.apply(image)
-
-    # 3) threshold nhị phân
-    image = cv2.threshold(
-        image,
-        0,
-        255,
-        cv2.THRESH_BINARY + cv2.THRESH_OTSU,
-    )[1]
-
-    # 4) blur nhẹ để giảm nhiễu
-    image = cv2.medianBlur(image, 3)
+    if heavy:
+        # Side 2: chữ nhỏ, nhiều ngôn ngữ → cần preprocessing mạnh
+        # Scale 2x để chữ nhỏ rõ hơn
+        image = cv2.resize(
+            image,
+            None,
+            fx=1.0,
+            fy=1.0,
+            interpolation=cv2.INTER_CUBIC,
+        )
+        
+        # CLAHE mạnh hơn cho side 2
+        clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
+        image = clahe.apply(image)
+        
+        # Otsu threshold cho side 2 (text nhỏ cần nhị phân rõ)
+        _, image = cv2.threshold(
+            image,
+            0,
+            255,
+            cv2.THRESH_BINARY + cv2.THRESH_OTSU,
+        )
+        
+        # Denoise nhẹ
+        image = cv2.fastNlMeansDenoising(image, None, 10, 7, 21)
+    else:
+        # Side 1: chữ to, rõ ràng → preprocessing nhẹ
+        # Không scale, giữ nguyên kích thước
+        # Chỉ CLAHE nhẹ để tăng contrast
+        clahe = cv2.createCLAHE(clipLimit=1.0, tileGridSize=(8, 8))
+        image = clahe.apply(image)
 
     return Image.fromarray(image)
 
@@ -219,8 +225,13 @@ class PaddleOCREngine(BaseOCREngine):
 class TesseractOCREngine(BaseOCREngine):
     engine_name = "tesseract"
 
-    def __init__(self, lang: str = "eng") -> None:
+    def __init__(self, lang: str = "eng", side_langs: dict | None = None) -> None:
         self._lang = _normalize_tesseract_lang_spec(lang)
+        self._side_langs = side_langs or {}
+
+    def _lang_for_side(self, side: InspectionSide) -> str:
+        """Lấy ngôn ngữ phù hợp cho side, fallback về lang chung"""
+        return self._side_langs.get(side.value, self._lang)
 
     def run(self, side: InspectionSide, file: TemplateUploadFile) -> OCRDocument:
         if importlib.util.find_spec("pytesseract") and importlib.util.find_spec("PIL"):
@@ -238,16 +249,22 @@ class TesseractOCREngine(BaseOCREngine):
         from PIL import Image  # type: ignore
 
         with _materialize_input(file) as input_path:
-            image = _preprocess_for_tesseract(input_path)
+            # Side2 dùng heavy preprocessing, Side1 dùng light
+            heavy = side == InspectionSide.SIDE2
+            image = _preprocess_for_tesseract(input_path, heavy=heavy)
             
-            # Side 2 dùng PSM 4 (nhiều block), Side 1 dùng PSM 6 (uniform block)
-            psm = "4" if side == InspectionSide.SIDE2 else "6"
+            # Cả 2 sides đều dùng PSM 3 (fully automatic) để Tesseract tự phát hiện layout
+            # PSM 3 tốt hơn cho cả text đơn giản và phức tạp
+            psm = "3"
+            
+            # Lấy ngôn ngữ phù hợp cho side
+            lang = self._lang_for_side(side)
             
             data = pytesseract.image_to_data(
                 image,
-                lang=self._lang,
+                lang=lang,
                 output_type=pytesseract.Output.DICT,
-                config=f"--oem 3 --psm {psm} -c preserve_interword_spaces=1",
+                config=f"--oem 3 --psm {psm}",
             )
         blocks = parse_tesseract_data(data)
         return OCRDocument(
@@ -259,8 +276,11 @@ class TesseractOCREngine(BaseOCREngine):
 
     def _run_with_cli(self, side: InspectionSide, file: TemplateUploadFile) -> OCRDocument:
         with _materialize_input(file) as input_path:
-            # Side 2 dùng PSM 4 (nhiều block), Side 1 dùng PSM 6 (uniform block)
-            psm = "4" if side == InspectionSide.SIDE2 else "6"
+            # PSM 3 (fully automatic) cho cả 2 sides
+            psm = "3"
+            
+            # Lấy ngôn ngữ phù hợp cho side
+            lang = self._lang_for_side(side)
             
             result = subprocess.run(
                 [
@@ -268,7 +288,7 @@ class TesseractOCREngine(BaseOCREngine):
                     str(input_path),
                     "stdout",
                     "-l",
-                    self._lang,
+                    lang,
                     "--oem",
                     "3",
                     "--psm",
@@ -315,6 +335,7 @@ class AutoOCREngine(BaseOCREngine):
         self._preferred_engine = preferred_engine or str(config.get("engine", "auto"))
         self._lang = str(config.get("lang", "en"))
         self._use_angle_cls = bool(config.get("use_angle_cls", True))
+        self._side_langs = dict(config.get("side_langs", {}))
         # Explicit argument wins over config file
         if strict_real_ocr is not None:
             self._strict = strict_real_ocr
@@ -356,8 +377,7 @@ class AutoOCREngine(BaseOCREngine):
         if engine_name == "paddleocr":
             return PaddleOCREngine(lang=self._lang, use_angle_cls=self._use_angle_cls)
         if engine_name == "tesseract":
-            return TesseractOCREngine(lang=self._lang)
-        return MockOCREngine()
+            return TesseractOCREngine(lang=self._lang, side_langs=self._side_langs)
         return MockOCREngine()
 
 

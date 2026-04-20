@@ -14,6 +14,7 @@ from src.domain.models import (
     TemplateFieldDefinition,
     TemplateSideDefinition,
 )
+from src.ocr.panel_label import detect_panel_label_from_blocks, detect_panel_label_from_text
 
 
 class CompareEngine:
@@ -22,6 +23,51 @@ class CompareEngine:
     def __init__(self, policy: ComparisonPolicy | None = None) -> None:
         self._policy = policy or ComparisonPolicy()
         self._text_comparator = TextComparator(policy=self._policy)
+
+    def _build_panel_label_error(
+        self,
+        inspection_input: SideInspectionInput,
+    ) -> ComparisonError | None:
+        """
+        Validate RECTO/VERSO panel label.
+        Side1 phải là RECTO, Side2 phải là VERSO.
+        """
+        expected_label = "RECTO" if inspection_input.side.value == "side1" else "VERSO"
+
+        # Detect từ panel_label field hoặc fallback sang OCR blocks/text
+        actual_label = inspection_input.panel_label
+        if not actual_label or actual_label == "UNKNOWN":
+            actual_label = detect_panel_label_from_blocks(inspection_input.ocr_blocks)
+        if actual_label == "UNKNOWN":
+            actual_label = detect_panel_label_from_text(inspection_input.raw_text)
+
+        actual_label = actual_label.upper()
+
+        # Nếu không detect được → UNCERTAIN_RESULT
+        if actual_label == "UNKNOWN":
+            return ComparisonError(
+                side=inspection_input.side,
+                field_name="__panel_label__",
+                error_type=ErrorType.UNCERTAIN_RESULT,
+                severity=FieldPriority.MAJOR,
+                expected_value=expected_label,
+                actual_value=actual_label,
+                message="Cannot determine RECTO/VERSO label from OCR output.",
+            )
+
+        # Nếu detect được nhưng sai → WRONG_TEMPLATE (CRITICAL)
+        if actual_label != expected_label:
+            return ComparisonError(
+                side=inspection_input.side,
+                field_name="__panel_label__",
+                error_type=ErrorType.WRONG_TEMPLATE,
+                severity=FieldPriority.CRITICAL,
+                expected_value=expected_label,
+                actual_value=actual_label,
+                message=f"Expected {expected_label} but detected {actual_label}. Wrong side or template.",
+            )
+
+        return None
 
     def compare_side(
         self,
@@ -66,6 +112,15 @@ class CompareEngine:
 
             # LOW_PRINT_QUALITY → ghi lỗi nhưng vẫn compare tiếp (OCR có thể còn đọc được)
             errors.append(quality_error)
+
+        # ── 2.5) Panel label validation (RECTO/VERSO) ────────────────────────
+        panel_error = self._build_panel_label_error(inspection_input)
+        if panel_error is not None:
+            # Nếu sai RECTO/VERSO → fail ngay, không compare field nữa
+            if panel_error.error_type == ErrorType.WRONG_TEMPLATE:
+                return [panel_error]
+            # Nếu UNCERTAIN → ghi lỗi nhưng vẫn compare tiếp
+            errors.append(panel_error)
 
         # ── 3) Compare bình thường ───────────────────────────────────────────
         observed_map = {

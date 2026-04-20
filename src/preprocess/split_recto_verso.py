@@ -148,54 +148,10 @@ class RectoVersoSplitter:
 
     def _assign_sides(self, left: np.ndarray, right: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Tự động nhận diện RECTO/VERSO bằng cách OCR header của mỗi panel.
-        Fallback: trái=side1, phải=side2
+        Layout cố định: trái = side1, phải = side2
+        Không OCR header để tăng tốc độ
         """
-        try:
-            # OCR header strip của mỗi panel để tìm chữ RECTO/VERSO
-            left_label = self._detect_panel_label(left)
-            right_label = self._detect_panel_label(right)
-            
-            # Nếu phát hiện được RECTO/VERSO, map đúng
-            if "RECTO" in left_label.upper() and "VERSO" in right_label.upper():
-                return left, right  # trái=RECTO=side1, phải=VERSO=side2
-            elif "VERSO" in left_label.upper() and "RECTO" in right_label.upper():
-                return right, left  # phải=RECTO=side1, trái=VERSO=side2
-            elif "RECTO" in left_label.upper():
-                return left, right  # trái có RECTO → side1
-            elif "RECTO" in right_label.upper():
-                return right, left  # phải có RECTO → side1
-            elif "VERSO" in right_label.upper():
-                return left, right  # phải có VERSO → side2, trái là side1
-            elif "VERSO" in left_label.upper():
-                return right, left  # trái có VERSO → side2, phải là side1
-        except Exception:
-            pass  # Nếu OCR fail, dùng fallback
-        
-        # Fallback: trái=side1, phải=side2
         return left, right
-    
-    def _detect_panel_label(self, panel: np.ndarray) -> str:
-        """
-        OCR một strip nhỏ ở đầu panel để tìm chữ RECTO hoặc VERSO.
-        """
-        try:
-            import pytesseract
-            from PIL import Image
-            
-            h, w = panel.shape[:2]
-            # Lấy 15% đầu của panel
-            header_strip = panel[:int(h * 0.15), :]
-            
-            # Convert sang PIL Image
-            header_pil = Image.fromarray(cv2.cvtColor(header_strip, cv2.COLOR_BGR2RGB))
-            
-            # OCR với config đơn giản
-            text = pytesseract.image_to_string(header_pil, config='--psm 6')
-            return text.strip()
-        except Exception:
-            # Nếu không có pytesseract hoặc lỗi, return empty
-            return ""
 
     def _encode_jpg(self, image: np.ndarray) -> bytes:
         ok, buf = cv2.imencode(".jpg", image)

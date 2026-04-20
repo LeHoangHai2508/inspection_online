@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from src.domain.enums import InspectionSide, TemplateStatus
@@ -39,18 +40,25 @@ class TemplateService:
         )
         template_version = self._repository.next_version(template_id)
 
-        side1_definition = self._build_side_definition(
-            template_id=template_id,
-            template_version=template_version,
-            side=InspectionSide.SIDE1,
-            upload_request=request,
-        )
-        side2_definition = self._build_side_definition(
-            template_id=template_id,
-            template_version=template_version,
-            side=InspectionSide.SIDE2,
-            upload_request=request,
-        )
+        # Song song hóa OCR 2 sides để tăng tốc độ
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            future_side1 = executor.submit(
+                self._build_side_definition,
+                template_id,
+                template_version,
+                InspectionSide.SIDE1,
+                request,
+            )
+            future_side2 = executor.submit(
+                self._build_side_definition,
+                template_id,
+                template_version,
+                InspectionSide.SIDE2,
+                request,
+            )
+
+            side1_definition = future_side1.result()
+            side2_definition = future_side2.result()
 
         record = TemplateRecord(
             template_id=template_id,
@@ -344,10 +352,14 @@ _TEMPLATE_NOISE_PATTERNS = [
     re.compile(r"^\s*vers[o0]\s*\d*\s*$", re.IGNORECASE),
 ]
 
+# Pattern cho số đơn lẻ (1, 2, etc.)
+_SINGLE_DIGIT_PATTERN = re.compile(r"^\s*\d\s*$")
+
 
 def _filter_template_noise_blocks(blocks, side: InspectionSide):
     """
     Filter out RECTO/VERSO label blocks at edges.
+    Also filter single digits (1, 2) near edges that are likely part of RECTO/VERSO labels.
     """
     if not blocks:
         return []
@@ -362,20 +374,25 @@ def _filter_template_noise_blocks(blocks, side: InspectionSide):
         text = block.text.strip()
         normalized = re.sub(r"\s+", " ", text).strip()
 
-        # Check if matches RECTO/VERSO pattern
-        is_recto_verso_label = any(
-            pattern.match(normalized) for pattern in _TEMPLATE_NOISE_PATTERNS
-        )
-
-        # Calculate position
+        # Calculate position first
         top_ratio = (block.bbox.y1 - min_y) / total_height
         bottom_ratio = (max_y - block.bbox.y2) / total_height
 
         near_top = top_ratio <= 0.15
         near_bottom = bottom_ratio <= 0.18
 
-        # Filter if RECTO/VERSO AND near edge
-        if is_recto_verso_label and (near_top or near_bottom):
+        # Check if matches RECTO/VERSO pattern
+        is_recto_verso_label = any(
+            pattern.match(normalized) for pattern in _TEMPLATE_NOISE_PATTERNS
+        )
+
+        # Check if single digit near edge (likely part of RECTO 1 / VERSO 2)
+        is_single_digit_near_edge = (
+            _SINGLE_DIGIT_PATTERN.match(normalized) and (near_top or near_bottom)
+        )
+
+        # Filter if RECTO/VERSO AND near edge, OR single digit near edge
+        if (is_recto_verso_label and (near_top or near_bottom)) or is_single_digit_near_edge:
             continue
 
         filtered.append(block)

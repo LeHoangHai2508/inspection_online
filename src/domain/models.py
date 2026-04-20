@@ -140,6 +140,8 @@ class SideInspectionInput:
     # Lý do localization fail (bỏ trống khi thành công)
     localization_reason: str = ""
     ocr_blocks: list[OCRBlock] = field(default_factory=list)
+    # Panel label detected từ OCR (RECTO/VERSO/UNKNOWN)
+    panel_label: str = "UNKNOWN"
 
 
 @dataclass(frozen=True)
