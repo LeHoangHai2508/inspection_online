@@ -27,6 +27,15 @@ async def upload_template(
         if combined_file:
             # Auto-split combined template into side1 and side2
             combined_bytes = await combined_file.read()
+            
+            # Validate file is not empty
+            if not combined_bytes:
+                raise ValueError(
+                    f"Combined file '{combined_file.filename}' is empty or could not be read"
+                )
+            
+            print(f"[DEBUG] Combined file: {combined_file.filename}, size: {len(combined_bytes)} bytes")
+            
             splitter = RectoVersoSplitter()
             split_result = splitter.split(
                 image_bytes=combined_bytes,
@@ -46,14 +55,22 @@ async def upload_template(
             )
         elif side1_file and side2_file:
             # Traditional separate side1 + side2 upload
+            side1_bytes = await side1_file.read()
+            side2_bytes = await side2_file.read()
+            
+            if not side1_bytes:
+                raise ValueError(f"Side 1 file '{side1_file.filename}' is empty")
+            if not side2_bytes:
+                raise ValueError(f"Side 2 file '{side2_file.filename}' is empty")
+            
             side1_upload = TemplateUploadFile(
                 filename=side1_file.filename,
-                content=await side1_file.read(),
+                content=side1_bytes,
                 media_type=side1_file.content_type or "application/octet-stream",
             )
             side2_upload = TemplateUploadFile(
                 filename=side2_file.filename,
-                content=await side2_file.read(),
+                content=side2_bytes,
                 media_type=side2_file.content_type or "application/octet-stream",
             )
         else:

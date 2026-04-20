@@ -87,7 +87,37 @@ document.getElementById("template-upload-form").addEventListener("submit", async
   const statusBox = document.getElementById("upload-status");
   statusBox.innerHTML = "Đang upload và OCR...";
 
-  const fd = new FormData(form);
+  const fd = new FormData();
+  
+  // Add text fields
+  fd.append("template_name", form.template_name.value);
+  fd.append("product_code", form.product_code.value);
+  fd.append("created_by", form.created_by.value);
+  
+  // Add files based on mode
+  const mode = document.querySelector('input[name="upload_mode"]:checked').value;
+  
+  if (mode === "separate") {
+    const side1File = form.side1_file.files[0];
+    const side2File = form.side2_file.files[0];
+    
+    if (!side1File || !side2File) {
+      statusBox.innerHTML = '<span style="color:red;">Vui lòng chọn cả Side 1 và Side 2 file</span>';
+      return;
+    }
+    
+    fd.append("side1_file", side1File);
+    fd.append("side2_file", side2File);
+  } else {
+    const combinedFile = form.combined_file.files[0];
+    
+    if (!combinedFile) {
+      statusBox.innerHTML = '<span style="color:red;">Vui lòng chọn Combined Template file</span>';
+      return;
+    }
+    
+    fd.append("combined_file", combinedFile);
+  }
 
   try {
     const resp = await fetch("/api/templates/upload", {

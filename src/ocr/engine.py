@@ -87,12 +87,11 @@ class MockOCREngine(BaseOCREngine):
 
 def _preprocess_for_tesseract(input_path: Path):
     """
-    Preprocess for better OCR quality:
-    - Grayscale
-    - Upscale 2x
-    - CLAHE for local contrast enhancement
-    - Otsu threshold for binarization
-    - Light median blur to reduce noise
+    Preprocess ảnh để cải thiện chất lượng OCR:
+    1. Upscale 2x để chữ nhỏ rõ hơn
+    2. CLAHE để tăng tương phản cục bộ
+    3. Otsu threshold để nhị phân hóa
+    4. Median blur để giảm nhiễu
     """
     from PIL import Image  # type: ignore
 
@@ -100,7 +99,7 @@ def _preprocess_for_tesseract(input_path: Path):
     if image is None:
         raise RuntimeError(f"Cannot read image for OCR: {input_path}")
 
-    # Upscale 2x
+    # 1) upscale để chữ nhỏ rõ hơn
     image = cv2.resize(
         image,
         None,
@@ -109,11 +108,11 @@ def _preprocess_for_tesseract(input_path: Path):
         interpolation=cv2.INTER_CUBIC,
     )
 
-    # CLAHE - tăng tương phản cục bộ
+    # 2) tăng tương phản cục bộ
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     image = clahe.apply(image)
 
-    # Otsu threshold - nhị phân hóa
+    # 3) threshold nhị phân
     image = cv2.threshold(
         image,
         0,
@@ -121,10 +120,77 @@ def _preprocess_for_tesseract(input_path: Path):
         cv2.THRESH_BINARY + cv2.THRESH_OTSU,
     )[1]
 
-    # Median blur - giảm nhiễu nhẹ
+    # 4) blur nhẹ để giảm nhiễu
     image = cv2.medianBlur(image, 3)
 
     return Image.fromarray(image)
+
+
+def _list_installed_tesseract_langs() -> list[str]:
+    """
+    Lấy danh sách language packs đã cài trong máy từ:
+    tesseract --list-langs
+    
+    Loại bỏ:
+    - dòng header
+    - dòng rỗng
+    - osd / equ vì không phải language pack OCR text thông thường
+    """
+    if not shutil.which("tesseract"):
+        return []
+
+    try:
+        result = subprocess.run(
+            ["tesseract", "--list-langs"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except Exception:
+        return []
+
+    langs: list[str] = []
+    for line in result.stdout.splitlines():
+        item = line.strip()
+        if not item:
+            continue
+        if ":" in item:
+            # bỏ dòng kiểu: "List of available languages in ..."
+            continue
+        if item in {"osd", "equ"}:
+            continue
+        langs.append(item)
+
+    # bỏ trùng nhưng giữ thứ tự
+    deduped: list[str] = []
+    seen = set()
+    for lang in langs:
+        if lang not in seen:
+            seen.add(lang)
+            deduped.append(lang)
+
+    return deduped
+
+
+def _normalize_tesseract_lang_spec(lang: str | None) -> str:
+    """
+    Nếu config để:
+      - all
+      - *
+    thì tự động dùng toàn bộ language pack đã cài trong Tesseract.
+    
+    Nếu không lấy được danh sách, fallback về eng.
+    """
+    raw = (lang or "eng").strip()
+
+    if raw.lower() not in {"all", "*"}:
+        return raw
+
+    installed = _list_installed_tesseract_langs()
+    if not installed:
+        return "eng"
+
+    return "+".join(installed)
 
 
 class PaddleOCREngine(BaseOCREngine):
@@ -154,7 +220,7 @@ class TesseractOCREngine(BaseOCREngine):
     engine_name = "tesseract"
 
     def __init__(self, lang: str = "eng") -> None:
-        self._lang = lang
+        self._lang = _normalize_tesseract_lang_spec(lang)
 
     def run(self, side: InspectionSide, file: TemplateUploadFile) -> OCRDocument:
         if importlib.util.find_spec("pytesseract") and importlib.util.find_spec("PIL"):
@@ -172,14 +238,16 @@ class TesseractOCREngine(BaseOCREngine):
         from PIL import Image  # type: ignore
 
         with _materialize_input(file) as input_path:
-            # Preprocess để cải thiện chất lượng OCR
             image = _preprocess_for_tesseract(input_path)
+            
+            # Side 2 dùng PSM 4 (nhiều block), Side 1 dùng PSM 6 (uniform block)
+            psm = "4" if side == InspectionSide.SIDE2 else "6"
             
             data = pytesseract.image_to_data(
                 image,
                 lang=self._lang,
                 output_type=pytesseract.Output.DICT,
-                config="--oem 3 --psm 4 -c preserve_interword_spaces=1",
+                config=f"--oem 3 --psm {psm} -c preserve_interword_spaces=1",
             )
         blocks = parse_tesseract_data(data)
         return OCRDocument(
@@ -191,6 +259,9 @@ class TesseractOCREngine(BaseOCREngine):
 
     def _run_with_cli(self, side: InspectionSide, file: TemplateUploadFile) -> OCRDocument:
         with _materialize_input(file) as input_path:
+            # Side 2 dùng PSM 4 (nhiều block), Side 1 dùng PSM 6 (uniform block)
+            psm = "4" if side == InspectionSide.SIDE2 else "6"
+            
             result = subprocess.run(
                 [
                     "tesseract",
@@ -198,6 +269,10 @@ class TesseractOCREngine(BaseOCREngine):
                     "stdout",
                     "-l",
                     self._lang,
+                    "--oem",
+                    "3",
+                    "--psm",
+                    psm,
                 ],
                 capture_output=True,
                 text=True,

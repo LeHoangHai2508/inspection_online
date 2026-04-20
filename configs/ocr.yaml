@@ -1,5 +1,8 @@
 engine: tesseract
-lang: eng+jpn+rus+chi_sim
+# lang: all → tự động dùng tất cả language packs đã cài trong Tesseract
+# lang: eng+jpn+rus → chỉ dùng các ngôn ngữ cụ thể
+# Dùng "all" để tự động lấy toàn bộ ngôn ngữ đã cài, không cần sửa tay
+lang: all
 use_angle_cls: true
 confidence_threshold: 0.75
 # strict_real_ocr: true  → fail hard nếu không có PaddleOCR/Tesseract (dùng cho prod)
