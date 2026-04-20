@@ -227,7 +227,8 @@ class AutoOCREngine(BaseOCREngine):
         if engine_name == "paddleocr":
             return PaddleOCREngine(lang=self._lang, use_angle_cls=self._use_angle_cls)
         if engine_name == "tesseract":
-            return TesseractOCREngine(lang="eng")
+            return TesseractOCREngine(lang=self._lang)
+        return MockOCREngine()
         return MockOCREngine()
 
 

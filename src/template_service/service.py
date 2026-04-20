@@ -246,7 +246,7 @@ class TemplateService:
 
     def _validate_review_ready(self, record: TemplateRecord) -> None:
         required_business_fields = {
-            InspectionSide.SIDE1: {"product_code"},
+            InspectionSide.SIDE1: set(),
             InspectionSide.SIDE2: set(),
         }
 

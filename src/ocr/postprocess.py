@@ -8,27 +8,7 @@ def extract_candidate_fields(
     side: InspectionSide,
     blocks: list[OCRBlock],
 ) -> list[TemplateFieldDefinition]:
-    fields: list[TemplateFieldDefinition] = []
-
-    for block in blocks:
-        if ":" not in block.text:
-            continue
-
-        field_name, expected_value = block.text.split(":", 1)
-        fields.append(
-            TemplateFieldDefinition(
-                field_name=_slug(field_name),
-                expected_value=expected_value.strip(),
-                side=side,
-                field_type="text",
-                required=True,
-                compare_type=CompareType.EXACT,
-                priority=FieldPriority.MAJOR,
-                bbox=block.bbox,
-            )
-        )
-
-    return fields
+    return []
 
 
 def extract_runtime_observed_fields(blocks: list[OCRBlock]) -> list[ObservedField]:

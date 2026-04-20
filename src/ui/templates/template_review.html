@@ -30,9 +30,14 @@
   <div class="col-review">
     <h3>OCR Text</h3>
     <div class="ocr-panel">
-      <strong>Side1</strong>
-      <pre class="ocr-text">{{ preview.side1_raw_text or '(empty)' }}</pre>
-      <strong>Side2</strong>
+      <div style="border-bottom: 2px solid #ddd; padding-bottom: 8px; margin-bottom: 12px;">
+        <strong style="color: #2563eb;">Side1</strong>
+      </div>
+      <pre class="ocr-text" style="margin-bottom: 20px;">{{ preview.side1_raw_text or '(empty)' }}</pre>
+      
+      <div style="border-top: 2px solid #ddd; border-bottom: 2px solid #ddd; padding: 8px 0; margin-bottom: 12px;">
+        <strong style="color: #2563eb;">Side2</strong>
+      </div>
       <pre class="ocr-text">{{ preview.side2_raw_text or '(empty)' }}</pre>
     </div>
 

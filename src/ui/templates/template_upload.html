@@ -21,11 +21,27 @@
       </div>
 
       <div>
-        <label>Side 1 File</label>
-        <input type="file" name="side1_file" accept="image/*,.pdf" required />
+        <label>
+          <input type="radio" name="upload_mode" value="separate" checked onchange="toggleUploadMode()" />
+          Upload Side 1 + Side 2 riêng
+        </label>
+        <div id="separate-upload" style="margin-top:8px;">
+          <label>Side 1 File</label>
+          <input type="file" name="side1_file" id="side1_file" accept="image/*,.pdf" />
 
-        <label style="margin-top:12px;">Side 2 File</label>
-        <input type="file" name="side2_file" accept="image/*,.pdf" required />
+          <label style="margin-top:12px;">Side 2 File</label>
+          <input type="file" name="side2_file" id="side2_file" accept="image/*,.pdf" />
+        </div>
+
+        <label style="margin-top:16px;">
+          <input type="radio" name="upload_mode" value="combined" onchange="toggleUploadMode()" />
+          Upload Combined Template (tự động tách)
+        </label>
+        <div id="combined-upload" style="margin-top:8px; display:none;">
+          <label>Combined Template File</label>
+          <input type="file" name="combined_file" id="combined_file" accept="image/*" />
+          <small style="color:#666;">Ảnh ngang chứa cả recto + verso, hệ thống sẽ tự tách</small>
+        </div>
       </div>
     </div>
 
@@ -38,6 +54,32 @@
 </div>
 
 <script>
+function toggleUploadMode() {
+  const mode = document.querySelector('input[name="upload_mode"]:checked').value;
+  const separateDiv = document.getElementById("separate-upload");
+  const combinedDiv = document.getElementById("combined-upload");
+  const side1Input = document.getElementById("side1_file");
+  const side2Input = document.getElementById("side2_file");
+  const combinedInput = document.getElementById("combined_file");
+
+  if (mode === "separate") {
+    separateDiv.style.display = "block";
+    combinedDiv.style.display = "none";
+    side1Input.required = true;
+    side2Input.required = true;
+    combinedInput.required = false;
+    combinedInput.value = "";
+  } else {
+    separateDiv.style.display = "none";
+    combinedDiv.style.display = "block";
+    side1Input.required = false;
+    side2Input.required = false;
+    side1Input.value = "";
+    side2Input.value = "";
+    combinedInput.required = true;
+  }
+}
+
 document.getElementById("template-upload-form").addEventListener("submit", async (e) => {
   e.preventDefault();
 
