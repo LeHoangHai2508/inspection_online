@@ -52,8 +52,7 @@ def parse_paddle_output(result: Any) -> list[OCRBlock]:
 
 def parse_tesseract_data(data: dict[str, list[Any]]) -> list[OCRBlock]:
     """
-    Parse Tesseract output và group các token thành dòng.
-    Thay vì mỗi token một block, group theo vị trí Y gần nhau.
+    Parse Tesseract output và group theo line_num để ghép lại thành dòng hoàn chỉnh.
     """
     texts = data.get("text", [])
     confidences = data.get("conf", [])
@@ -61,21 +60,30 @@ def parse_tesseract_data(data: dict[str, list[Any]]) -> list[OCRBlock]:
     tops = data.get("top", [])
     widths = data.get("width", [])
     heights = data.get("height", [])
+    block_nums = data.get("block_num", [])
+    par_nums = data.get("par_num", [])
+    line_nums = data.get("line_num", [])
 
-    # Bước 1: Thu thập tất cả tokens hợp lệ
-    tokens = []
+    # Group tokens theo (block_num, par_num, line_num)
+    grouped: dict[tuple[int, int, int], list[dict[str, Any]]] = {}
+
     for index, text in enumerate(texts):
         cleaned = str(text).strip()
         if not cleaned:
             continue
 
-        confidence = _safe_confidence(confidences[index] if index < len(confidences) else 0)
+        block_num = int(block_nums[index]) if index < len(block_nums) else 0
+        par_num = int(par_nums[index]) if index < len(par_nums) else 0
+        line_num = int(line_nums[index]) if index < len(line_nums) else 0
+
         left = int(lefts[index]) if index < len(lefts) else 0
         top = int(tops[index]) if index < len(tops) else 0
         width = int(widths[index]) if index < len(widths) else 0
         height = int(heights[index]) if index < len(heights) else 0
-        
-        tokens.append({
+        confidence = _safe_confidence(confidences[index] if index < len(confidences) else 0)
+
+        key = (block_num, par_num, line_num)
+        grouped.setdefault(key, []).append({
             "text": cleaned,
             "left": left,
             "top": top,
@@ -83,66 +91,46 @@ def parse_tesseract_data(data: dict[str, list[Any]]) -> list[OCRBlock]:
             "height": height,
             "confidence": confidence,
         })
+
+    # Tạo OCRBlock cho mỗi dòng
+    blocks: list[OCRBlock] = []
+    line_index = 1
     
-    if not tokens:
-        return []
-    
-    # Bước 2: Group tokens thành lines theo Y position
-    # Sort theo top trước
-    tokens.sort(key=lambda t: (t["top"], t["left"]))
-    
-    lines = []
-    current_line = [tokens[0]]
-    current_top = tokens[0]["top"]
-    line_height_threshold = tokens[0]["height"] * 0.5  # Nếu chênh lệch Y < 50% height thì cùng dòng
-    
-    for token in tokens[1:]:
-        if abs(token["top"] - current_top) <= line_height_threshold:
-            # Cùng dòng
-            current_line.append(token)
-        else:
-            # Dòng mới
-            lines.append(current_line)
-            current_line = [token]
-            current_top = token["top"]
-            line_height_threshold = token["height"] * 0.5
-    
-    # Thêm dòng cuối
-    if current_line:
-        lines.append(current_line)
-    
-    # Bước 3: Tạo OCRBlock cho mỗi dòng
-    blocks = []
-    for line_index, line_tokens in enumerate(lines, start=1):
+    for _, items in sorted(grouped.items(), key=lambda kv: min(x["top"] for x in kv[1])):
         # Sort tokens trong dòng theo left
-        line_tokens.sort(key=lambda t: t["left"])
-        
+        items = sorted(items, key=lambda x: x["left"])
+
         # Join text
-        line_text = " ".join(t["text"] for t in line_tokens)
-        
+        line_text = " ".join(item["text"] for item in items).strip()
+        if not line_text:
+            continue
+
         # Tính bounding box của cả dòng
-        min_left = min(t["left"] for t in line_tokens)
-        max_right = max(t["left"] + t["width"] for t in line_tokens)
-        min_top = min(t["top"] for t in line_tokens)
-        max_bottom = max(t["top"] + t["height"] for t in line_tokens)
-        
-        # Confidence trung bình
-        avg_confidence = sum(t["confidence"] for t in line_tokens) / len(line_tokens)
-        
+        x1 = min(item["left"] for item in items)
+        y1 = min(item["top"] for item in items)
+        x2 = max(item["left"] + item["width"] for item in items)
+        y2 = max(item["top"] + item["height"] for item in items)
+        avg_conf = sum(item["confidence"] for item in items) / max(len(items), 1)
+
         blocks.append(
             OCRBlock(
                 text=line_text,
-                bbox=BoundingBox(min_left, min_top, max_right, max_bottom),
-                confidence=avg_confidence,
+                bbox=BoundingBox(x1, y1, x2, y2),
+                confidence=avg_conf,
                 line_index=line_index,
             )
         )
-    
+        line_index += 1
+
     return blocks
 
 
 def render_blocks_to_text(blocks: list[OCRBlock]) -> str:
-    return "\n".join(block.text for block in blocks)
+    if not blocks:
+        return ""
+    # Sort theo vị trí Y, X trước khi render
+    sorted_blocks = sorted(blocks, key=lambda b: (b.bbox.y1, b.bbox.x1))
+    return "\n".join(block.text for block in sorted_blocks)
 
 
 def _bbox_from_points(points: list[list[float]]) -> BoundingBox:

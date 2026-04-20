@@ -8,54 +8,56 @@
   <span class="badge badge-{{ template.status | lower }}">{{ template.status }}</span>
 </div>
 
-<div class="two-col">
-  <!-- Left: images -->
-  <div class="col-images">
-    <h3>Side 1</h3>
+<!-- Layout 2 cột: Side 1 bên trái, Side 2 bên phải -->
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px;">
+  <!-- Side 1 -->
+  <div>
+    <h3 style="color: #2563eb; margin-bottom: 12px;">Side 1</h3>
     {% if preview.original_file_paths.side1 %}
-      <img src="/storage/{{ preview.original_file_paths.side1 }}" alt="side1" class="template-img" />
+      <img src="/storage/{{ preview.original_file_paths.side1 }}" alt="side1" style="max-width: 100%; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 16px;" />
     {% else %}
       <div class="img-placeholder">Không có ảnh</div>
     {% endif %}
-
-    <h3>Side 2</h3>
-    {% if preview.original_file_paths.side2 %}
-      <img src="/storage/{{ preview.original_file_paths.side2 }}" alt="side2" class="template-img" />
-    {% else %}
-      <div class="img-placeholder">Không có ảnh</div>
-    {% endif %}
+    
+    <div style="background: #f9fafb; padding: 12px; border-radius: 4px; border: 1px solid #e5e7eb;">
+      <strong style="font-size: 14px; color: #374151;">OCR Text:</strong>
+      <pre style="margin-top: 8px; font-size: 12px; white-space: pre-wrap; max-height: 300px; overflow-y: auto;">{{ preview.side1_raw_text or '(empty)' }}</pre>
+    </div>
   </div>
 
-  <!-- Right: OCR + fields -->
-  <div class="col-review">
-    <h3>OCR Text</h3>
-    <div class="ocr-panel">
-      <div style="border-bottom: 2px solid #ddd; padding-bottom: 8px; margin-bottom: 12px;">
-        <strong style="color: #2563eb;">Side1</strong>
-      </div>
-      <pre class="ocr-text" style="margin-bottom: 20px;">{{ preview.side1_raw_text or '(empty)' }}</pre>
-      
-      <div style="border-top: 2px solid #ddd; border-bottom: 2px solid #ddd; padding: 8px 0; margin-bottom: 12px;">
-        <strong style="color: #2563eb;">Side2</strong>
-      </div>
-      <pre class="ocr-text">{{ preview.side2_raw_text or '(empty)' }}</pre>
-    </div>
-
-    {% if preview.unmapped_blocks.side1 or preview.unmapped_blocks.side2 %}
-    <div class="alert alert-warn">
-      Có block chưa map — kiểm tra lại trước khi approve.
-    </div>
+  <!-- Side 2 -->
+  <div>
+    <h3 style="color: #2563eb; margin-bottom: 12px;">Side 2</h3>
+    {% if preview.original_file_paths.side2 %}
+      <img src="/storage/{{ preview.original_file_paths.side2 }}" alt="side2" style="max-width: 100%; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 16px;" />
+    {% else %}
+      <div class="img-placeholder">Không có ảnh</div>
     {% endif %}
+    
+    <div style="background: #f9fafb; padding: 12px; border-radius: 4px; border: 1px solid #e5e7eb;">
+      <strong style="font-size: 14px; color: #374151;">OCR Text:</strong>
+      <pre style="margin-top: 8px; font-size: 12px; white-space: pre-wrap; max-height: 300px; overflow-y: auto;">{{ preview.side2_raw_text or '(empty)' }}</pre>
+    </div>
+  </div>
+</div>
 
-    <h3>Fields</h3>
-    <form id="field-form" method="POST" action="/templates/{{ template.template_id }}/fields">
-      <table class="data-table" id="fields-table">
-        <thead>
-          <tr>
-            <th>Side</th>
-            <th>Field Name</th>
-            <th>Expected Value</th>
-            <th>Compare Type</th>
+<!-- Fields section ở dưới -->
+<div>
+  {% if preview.unmapped_blocks.side1 or preview.unmapped_blocks.side2 %}
+  <div class="alert alert-warn">
+    Có block chưa map — kiểm tra lại trước khi approve.
+  </div>
+  {% endif %}
+
+  <h3>Fields</h3>
+  <form id="field-form" method="POST" action="/templates/{{ template.template_id }}/fields">
+    <table class="data-table" id="fields-table">
+      <thead>
+        <tr>
+          <th>Side</th>
+          <th>Field Name</th>
+          <th>Expected Value</th>
+          <th>Compare Type</th>
             <th>Priority</th>
             <th>Required</th>
             <th></th>
@@ -104,6 +106,5 @@
         <button type="submit" class="btn btn-danger">Reject</button>
       </form>
     </div>
-  </div>
 </div>
 {% endblock %}

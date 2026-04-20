@@ -125,35 +125,17 @@ class TesseractOCREngine(BaseOCREngine):
     ) -> OCRDocument:
         import pytesseract  # type: ignore
         from PIL import Image  # type: ignore
-        import cv2
-        import numpy as np
 
         with _materialize_input(file) as input_path:
-            # Đọc ảnh bằng OpenCV để preprocess
-            img_cv = cv2.imread(str(input_path))
-            
-            # Preprocess: grayscale, tăng contrast, threshold, upscale
-            gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
-            
-            # Tăng contrast bằng CLAHE
-            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-            enhanced = clahe.apply(gray)
-            
-            # Threshold để tăng độ rõ chữ
-            _, thresh = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-            
-            # Upscale 2x để OCR đọc chữ nhỏ tốt hơn
-            h, w = thresh.shape
-            upscaled = cv2.resize(thresh, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
-            
-            # Convert sang PIL Image
-            image = Image.fromarray(upscaled)
+            # Preprocess đơn giản: grayscale + upscale 2x
+            image = Image.open(input_path).convert("L")  # Grayscale
+            image = image.resize((image.width * 2, image.height * 2))  # Upscale 2x
             
             data = pytesseract.image_to_data(
                 image,
                 lang=self._lang,
                 output_type=pytesseract.Output.DICT,
-                config='--psm 6 --oem 3'  # PSM 6: uniform block of text, OEM 3: default
+                config="--oem 3 --psm 6"  # OEM 3: default, PSM 6: uniform block
             )
         blocks = parse_tesseract_data(data)
         return OCRDocument(
@@ -166,7 +148,17 @@ class TesseractOCREngine(BaseOCREngine):
     def _run_with_cli(self, side: InspectionSide, file: TemplateUploadFile) -> OCRDocument:
         with _materialize_input(file) as input_path:
             result = subprocess.run(
-                ["tesseract", str(input_path), "stdout", "-l", self._lang],
+                [
+                    "tesseract",
+                    str(input_path),
+                    "stdout",
+                    "-l",
+                    self._lang,
+                    "--oem",
+                    "3",
+                    "--psm",
+                    "6",
+                ],
                 capture_output=True,
                 text=True,
                 check=True,
