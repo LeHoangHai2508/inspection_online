@@ -125,13 +125,35 @@ class TesseractOCREngine(BaseOCREngine):
     ) -> OCRDocument:
         import pytesseract  # type: ignore
         from PIL import Image  # type: ignore
+        import cv2
+        import numpy as np
 
         with _materialize_input(file) as input_path:
-            image = Image.open(input_path)
+            # Đọc ảnh bằng OpenCV để preprocess
+            img_cv = cv2.imread(str(input_path))
+            
+            # Preprocess: grayscale, tăng contrast, threshold, upscale
+            gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+            
+            # Tăng contrast bằng CLAHE
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+            enhanced = clahe.apply(gray)
+            
+            # Threshold để tăng độ rõ chữ
+            _, thresh = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            
+            # Upscale 2x để OCR đọc chữ nhỏ tốt hơn
+            h, w = thresh.shape
+            upscaled = cv2.resize(thresh, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
+            
+            # Convert sang PIL Image
+            image = Image.fromarray(upscaled)
+            
             data = pytesseract.image_to_data(
                 image,
                 lang=self._lang,
                 output_type=pytesseract.Output.DICT,
+                config='--psm 6 --oem 3'  # PSM 6: uniform block of text, OEM 3: default
             )
         blocks = parse_tesseract_data(data)
         return OCRDocument(
