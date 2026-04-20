@@ -1,10 +1,10 @@
-engine: auto
+engine: tesseract
 lang: en
 use_angle_cls: true
 confidence_threshold: 0.75
 # strict_real_ocr: true  → fail hard nếu không có PaddleOCR/Tesseract (dùng cho prod)
 # strict_real_ocr: false → fallback mock (dùng cho dev/local)
-strict_real_ocr: false
+strict_real_ocr: true
 providers:
   - paddleocr
   - tesseract

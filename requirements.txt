@@ -14,3 +14,5 @@ streamlit
 pyyaml
 jinja2
 aiofiles
+paddlepaddle
+pytesseract

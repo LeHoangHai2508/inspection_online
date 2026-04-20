@@ -209,7 +209,7 @@ class TemplateService:
             raw_text = document.raw_text
             ocr_blocks = document.blocks
             if not fields:
-                fields = extracted_fields
+                fields = []
 
         return TemplateSideDefinition(
             side=side,

@@ -43,7 +43,11 @@ class MockOCREngine(BaseOCREngine):
     engine_name = "mock"
 
     def run(self, side: InspectionSide, file: TemplateUploadFile) -> OCRDocument:
-        raw_text = self._decode_content(file.content, file.filename)
+        raw_text = self._decode_content(
+            content=file.content,
+            filename=file.filename,
+            media_type=file.media_type,
+        )
         blocks = parse_text_to_blocks(raw_text)
         return OCRDocument(
             side=side,
@@ -53,7 +57,22 @@ class MockOCREngine(BaseOCREngine):
         )
 
     @staticmethod
-    def _decode_content(content: bytes, filename: str) -> str:
+    def _decode_content(content: bytes, filename: str, media_type: str | None) -> str:
+        suffix = Path(filename).suffix.lower()
+        binary_suffixes = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff", ".pdf"}
+
+        if media_type and (media_type.startswith("image/") or media_type == "application/pdf"):
+            raise RuntimeError(
+                f"Mock OCR cannot decode binary image/pdf file: {filename}. "
+                "Use paddleocr or tesseract, or upload plain text fixture only."
+            )
+
+        if suffix in binary_suffixes:
+            raise RuntimeError(
+                f"Mock OCR cannot decode binary image/pdf file: {filename}. "
+                "Use paddleocr or tesseract, or upload plain text fixture only."
+            )
+
         if not content:
             return f"EMPTY_FILE:{filename}"
 
