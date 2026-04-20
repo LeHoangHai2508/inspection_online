@@ -12,6 +12,7 @@ from src.domain.models import (
     StoredFile,
 )
 from src.ocr.run_ocr import OCRWorkflow
+from src.ocr.parser import render_blocks_to_text
 from src.template_service.repository import TemplateRepository
 from src.template_service.validators import validate_template_upload_request
 from src.utils.paths import TEMPLATE_STORAGE, ensure_storage_tree, make_side_folder
@@ -206,8 +207,16 @@ class TemplateService:
                 side=side,
                 file=upload_file,
             )
-            raw_text = document.raw_text
-            ocr_blocks = document.blocks
+            
+            # Filter RECTO/VERSO noise blocks
+            filtered_blocks = _filter_template_noise_blocks(
+                blocks=document.blocks,
+                side=side,
+            )
+            
+            raw_text = render_blocks_to_text(filtered_blocks)
+            ocr_blocks = filtered_blocks
+            
             if not fields:
                 fields = []
 
@@ -327,3 +336,50 @@ def _block_field_name(text: str) -> str | None:
     if ":" not in text:
         return None
     return "_".join(text.split(":", 1)[0].strip().lower().split())
+
+
+# Template noise filtering
+_TEMPLATE_NOISE_PATTERNS = [
+    re.compile(r"^\s*recto\s*\d*\s*$", re.IGNORECASE),
+    re.compile(r"^\s*verso\s*\d*\s*$", re.IGNORECASE),
+]
+
+
+def _filter_template_noise_blocks(blocks, side: InspectionSide):
+    """
+    Filter out RECTO/VERSO label blocks that appear at top/bottom edges.
+    Only removes blocks that:
+    1. Match RECTO or VERSO pattern
+    2. Are located near top (15%) or bottom (15%) of the layout
+    """
+    if not blocks:
+        return []
+
+    min_y = min(block.bbox.y1 for block in blocks)
+    max_y = max(block.bbox.y2 for block in blocks)
+    total_height = max(1, max_y - min_y)
+
+    filtered = []
+    for block in blocks:
+        text = block.text.strip()
+        normalized = re.sub(r"\s+", " ", text).strip()
+
+        # Check if text matches RECTO/VERSO pattern
+        is_recto_verso_label = any(
+            pattern.match(normalized) for pattern in _TEMPLATE_NOISE_PATTERNS
+        )
+
+        # Calculate position ratios
+        top_ratio = (block.bbox.y1 - min_y) / total_height
+        bottom_ratio = (max_y - block.bbox.y2) / total_height
+
+        near_top = top_ratio <= 0.15  # Tăng từ 0.12 lên 0.15
+        near_bottom = bottom_ratio <= 0.15  # Tăng từ 0.12 lên 0.15
+
+        # Only filter if it's RECTO/VERSO AND near edge
+        if is_recto_verso_label and (near_top or near_bottom):
+            continue
+
+        filtered.append(block)
+
+    return filtered

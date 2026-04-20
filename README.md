@@ -252,3 +252,19 @@ docs/           Spec, architecture, API contract
 - Route `/inspection/side1/live` và `/side2/live` chụp trực tiếp từ camera (dùng trên line thật)
 - Template chưa `APPROVED` sẽ bị từ chối khi gọi runtime
 - IoT mặc định ở chế độ `mock` — ghi file JSON vào `storage/iot_events/`
+
+
+
+
+
+
+
+
+
+
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass 
+
+.venv\Scripts\activate
+
+
+python -m uvicorn src.api.main:app --reload --host 127.0.0.1 --port 8000
