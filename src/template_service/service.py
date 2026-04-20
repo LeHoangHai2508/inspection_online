@@ -340,17 +340,14 @@ def _block_field_name(text: str) -> str | None:
 
 # Template noise filtering
 _TEMPLATE_NOISE_PATTERNS = [
-    re.compile(r"^\s*recto\s*\d*\s*$", re.IGNORECASE),
-    re.compile(r"^\s*verso\s*\d*\s*$", re.IGNORECASE),
+    re.compile(r"^\s*rect[o0]\s*\d*\s*$", re.IGNORECASE),
+    re.compile(r"^\s*vers[o0]\s*\d*\s*$", re.IGNORECASE),
 ]
 
 
 def _filter_template_noise_blocks(blocks, side: InspectionSide):
     """
-    Filter out RECTO/VERSO label blocks that appear at top/bottom edges.
-    Only removes blocks that:
-    1. Match RECTO or VERSO pattern
-    2. Are located near top (15%) or bottom (15%) of the layout
+    Filter out RECTO/VERSO label blocks at edges.
     """
     if not blocks:
         return []
@@ -360,23 +357,24 @@ def _filter_template_noise_blocks(blocks, side: InspectionSide):
     total_height = max(1, max_y - min_y)
 
     filtered = []
+    
     for block in blocks:
         text = block.text.strip()
         normalized = re.sub(r"\s+", " ", text).strip()
 
-        # Check if text matches RECTO/VERSO pattern
+        # Check if matches RECTO/VERSO pattern
         is_recto_verso_label = any(
             pattern.match(normalized) for pattern in _TEMPLATE_NOISE_PATTERNS
         )
 
-        # Calculate position ratios
+        # Calculate position
         top_ratio = (block.bbox.y1 - min_y) / total_height
         bottom_ratio = (max_y - block.bbox.y2) / total_height
 
-        near_top = top_ratio <= 0.15  # Tăng từ 0.12 lên 0.15
-        near_bottom = bottom_ratio <= 0.15  # Tăng từ 0.12 lên 0.15
+        near_top = top_ratio <= 0.15
+        near_bottom = bottom_ratio <= 0.18
 
-        # Only filter if it's RECTO/VERSO AND near edge
+        # Filter if RECTO/VERSO AND near edge
         if is_recto_verso_label and (near_top or near_bottom):
             continue
 

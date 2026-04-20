@@ -9,6 +9,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import cv2
+import numpy as np
+
 # Set environment variables BEFORE any paddle imports
 os.environ['FLAGS_use_mkldnn'] = '0'
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
@@ -82,6 +85,48 @@ class MockOCREngine(BaseOCREngine):
             return content.decode("utf-8", errors="ignore") or f"BINARY_FILE:{filename}"
 
 
+def _preprocess_for_tesseract(input_path: Path):
+    """
+    Preprocess for better OCR quality:
+    - Grayscale
+    - Upscale 2x
+    - CLAHE for local contrast enhancement
+    - Otsu threshold for binarization
+    - Light median blur to reduce noise
+    """
+    from PIL import Image  # type: ignore
+
+    image = cv2.imread(str(input_path), cv2.IMREAD_GRAYSCALE)
+    if image is None:
+        raise RuntimeError(f"Cannot read image for OCR: {input_path}")
+
+    # Upscale 2x
+    image = cv2.resize(
+        image,
+        None,
+        fx=2.0,
+        fy=2.0,
+        interpolation=cv2.INTER_CUBIC,
+    )
+
+    # CLAHE - tăng tương phản cục bộ
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    image = clahe.apply(image)
+
+    # Otsu threshold - nhị phân hóa
+    image = cv2.threshold(
+        image,
+        0,
+        255,
+        cv2.THRESH_BINARY + cv2.THRESH_OTSU,
+    )[1]
+
+    # Median blur - giảm nhiễu nhẹ
+    image = cv2.medianBlur(image, 3)
+
+    return Image.fromarray(image)
+
+
 class PaddleOCREngine(BaseOCREngine):
     engine_name = "paddleocr"
 
@@ -127,15 +172,14 @@ class TesseractOCREngine(BaseOCREngine):
         from PIL import Image  # type: ignore
 
         with _materialize_input(file) as input_path:
-            # Preprocess đơn giản: grayscale + upscale 2x
-            image = Image.open(input_path).convert("L")  # Grayscale
-            image = image.resize((image.width * 2, image.height * 2))  # Upscale 2x
+            # Preprocess để cải thiện chất lượng OCR
+            image = _preprocess_for_tesseract(input_path)
             
             data = pytesseract.image_to_data(
                 image,
                 lang=self._lang,
                 output_type=pytesseract.Output.DICT,
-                config="--oem 3 --psm 6"  # OEM 3: default, PSM 6: uniform block
+                config="--oem 3 --psm 4 -c preserve_interword_spaces=1",
             )
         blocks = parse_tesseract_data(data)
         return OCRDocument(
@@ -154,10 +198,6 @@ class TesseractOCREngine(BaseOCREngine):
                     "stdout",
                     "-l",
                     self._lang,
-                    "--oem",
-                    "3",
-                    "--psm",
-                    "6",
                 ],
                 capture_output=True,
                 text=True,
