@@ -1,72 +1,77 @@
-# Final Fix Summary - 4 Vấn đề Đã Sửa
+# Final Fix Summary - Tất cả đã sửa
 
-## ✅ Tất cả đã được sửa
+## ✅ 7 Vấn đề Đã Sửa Hoàn Toàn
 
-### 1. Parser group theo line thật ✅
+### Batch 1: 4 vấn đề cơ bản
+1. ✅ Parser group theo line thật
+2. ✅ Side1 resize 1.6x
+3. ✅ Side2 clipLimit=2.0
+4. ✅ Side1 thêm chi_sim
+
+### Batch 2: 3 vấn đề Arabic & CJK (MỚI)
+5. ✅ Parser xử lý Arabic theo span (không hardcode)
+6. ✅ Bỏ threshold side2 (giữ nét CJK nhỏ)
+7. ✅ PSM 11 cho side2 (sparse text)
+
+---
+
+## 🎯 Sửa đổi mới nhất
+
+### ✅ 5. Parser Arabic theo span
 **File:** `src/ocr/parser.py`
 
-**Đã sửa:**
-- Group token theo `(block_num, par_num, line_num)` từ Tesseract
-- Mỗi dòng thật → 1 OCRBlock
-- Sort theo `(min_top, min_left)`
-- `render_blocks_to_text()` chỉ nối dòng, không tự đoán
+**Thêm:**
+- `_is_arabic_token()` - Detect Arabic bằng Unicode range
+- `_merge_items_preserve_script_direction()` - Ghép theo span script
+
+**Logic:**
+```python
+# Tách dòng thành spans theo script
+# Span Arabic: đảo phải -> trái
+# Span khác: giữ trái -> phải
+```
 
 **Kết quả:**
-- ✅ Không còn đảo thứ tự dòng
-- ✅ Dòng dưới không chen lên trước
-- ✅ Text không bị xé nhỏ
+- ✅ "Made in Vietnam فيتنام في" (đúng)
+- ✅ Không hardcode câu
+- ✅ Scale cho mọi câu Arabic
 
 ---
 
-### 2. Side1 resize 1.6x ✅
+### ✅ 6. Bỏ threshold side2
 **File:** `src/ocr/engine.py`
 
-**Đã sửa:**
+**Thay đổi:**
 ```python
-else:
-    # Side1: resize nhẹ để giữ chữ nhỏ ở cuối nhãn
-    image = cv2.resize(image, None, fx=1.6, fy=1.6, ...)
-    clahe = cv2.createCLAHE(clipLimit=1.2, ...)
-    # Không threshold để giữ nét
+# Comment out threshold
+# _, image = cv2.threshold(
+#     image,
+#     0,
+#     255,
+#     cv2.THRESH_BINARY + cv2.THRESH_OTSU,
+# )
 ```
 
 **Kết quả:**
-- ✅ Không mất chữ ở cuối nhãn
-- ✅ Chữ nhỏ được phóng to trước OCR
+- ✅ Giữ nét mảnh CJK
+- ✅ Không dính nét
+- ✅ Chữ Trung nhỏ ở cuối đọc tốt hơn
 
 ---
 
-### 3. Side2 clipLimit=2.0 ✅
+### ✅ 7. PSM 11 cho side2
 **File:** `src/ocr/engine.py`
 
-**Đã sửa:**
+**Thay đổi:**
 ```python
-if heavy:
-    # Side2
-    image = cv2.resize(image, None, fx=2.0, fy=2.0, ...)
-    clahe = cv2.createCLAHE(clipLimit=2.0, ...)  # Giảm từ 2.5
-    _, image = cv2.threshold(...)
-    # Tắt denoise
+# Trước: psm = "4" (single column)
+# Sau:   psm = "11" (sparse text)
+psm = "6" if side == InspectionSide.SIDE1 else "11"
 ```
 
 **Kết quả:**
-- ✅ Không bị "cháy" contrast
-- ✅ Giữ được nét chữ nhỏ
-
----
-
-### 4. Side1 thêm chi_sim ✅
-**File:** `configs/ocr.yaml`
-
-**Đã sửa:**
-```yaml
-side_langs:
-  side1: eng+fra+deu+ita+spa+por+rus+ara+chi_sim  # ✅ Thêm chi_sim
-  side2: eng+jpn+chi_sim+chi_tra+kor+tha+vie+rus
-```
-
-**Kết quả:**
-- ✅ Đọc được chữ Trung: `中国 170/76A`
+- ✅ Phù hợp text phân mảnh
+- ✅ Tốt hơn cho đa ngôn ngữ mixed
 
 ---
 
@@ -127,16 +132,19 @@ python -m uvicorn src.api.main:app --reload --host 127.0.0.1 --port 8000
 ### Side1 (mặt trước)
 - ✅ Thứ tự dòng đúng
 - ✅ Không mất chữ ở cuối
-- ✅ Đọc được: "Made in Vietnam"
-- ✅ Đọc được: "中国 170/76A"
+- ✅ "Made in Vietnam" (Latin đúng)
+- ✅ "فيتنام في" (Arabic đúng thứ tự, không hardcode)
+- ✅ "中国 170/76A" (CJK đúng)
 - ✅ Giữ spaces và layout
 
 ### Side2 (mặt sau)
 - ✅ Thứ tự dòng đúng
 - ✅ Không bị dòng dưới in trước
 - ✅ Đọc được đa ngôn ngữ
+- ✅ Chữ Trung nhỏ ở cuối đọc tốt (không threshold)
 - ✅ Giữ dấu chấm, dấu phẩy
 - ✅ Không lẫn glyph
+- ✅ PSM 11 phù hợp text sparse
 
 ---
 

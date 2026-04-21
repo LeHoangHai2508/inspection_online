@@ -110,12 +110,14 @@ def _preprocess_for_tesseract(input_path: Path, heavy: bool = True):
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         image = clahe.apply(image)
 
-        _, image = cv2.threshold(
-            image,
-            0,
-            255,
-            cv2.THRESH_BINARY + cv2.THRESH_OTSU,
-        )
+        # Bỏ threshold cho side2 để giữ nét chữ Trung nhỏ ở cuối nhãn.
+        # Threshold toàn cục đang làm dính nét/gãy nét với CJK nhỏ.
+        # _, image = cv2.threshold(
+        #     image,
+        #     0,
+        #     255,
+        #     cv2.THRESH_BINARY + cv2.THRESH_OTSU,
+        # )
 
         # Tắt denoise để không mất nét nhỏ
         # image = cv2.fastNlMeansDenoising(image, None, 10, 7, 21)
@@ -257,8 +259,8 @@ class TesseractOCREngine(BaseOCREngine):
             image = _preprocess_for_tesseract(input_path, heavy=heavy)
             
             # side1 đơn giản hơn -> psm 6
-            # side2 nhiều block/ngôn ngữ -> psm 4
-            psm = "6" if side == InspectionSide.SIDE1 else "4"
+            # side2 nhiều block/ngôn ngữ/sparse text -> psm 11
+            psm = "6" if side == InspectionSide.SIDE1 else "11"
             lang = self._lang_for_side(side)
             
             data = pytesseract.image_to_data(
@@ -277,7 +279,7 @@ class TesseractOCREngine(BaseOCREngine):
 
     def _run_with_cli(self, side: InspectionSide, file: TemplateUploadFile) -> OCRDocument:
         with _materialize_input(file) as input_path:
-            psm = "6" if side == InspectionSide.SIDE1 else "4"
+            psm = "6" if side == InspectionSide.SIDE1 else "11"
             lang = self._lang_for_side(side)
             
             result = subprocess.run(

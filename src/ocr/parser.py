@@ -1,8 +1,64 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from src.domain.models import BoundingBox, OCRBlock
+
+
+def _is_arabic_token(text: str) -> bool:
+    """
+    Kiểm tra token có chứa ký tự Arabic hay không.
+    Không dựa vào từ cụ thể, chỉ dựa vào script.
+    """
+    if not text:
+        return False
+    return bool(re.search(r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]", text))
+
+
+def _merge_items_preserve_script_direction(items: list[dict]) -> str:
+    """
+    Ghép token theo từng cụm script:
+    - Cụm Arabic: phải -> trái
+    - Cụm khác: trái -> phải
+    
+    Mục tiêu:
+    - Không đảo cả dòng
+    - Chỉ đảo đúng span Arabic liền nhau
+    """
+    if not items:
+        return ""
+
+    ordered = sorted(items, key=lambda item: item["left"])
+
+    spans: list[list[dict]] = []
+    current_span: list[dict] = [ordered[0]]
+    current_is_arabic = _is_arabic_token(ordered[0]["text"])
+
+    for item in ordered[1:]:
+        item_is_arabic = _is_arabic_token(item["text"])
+
+        if item_is_arabic == current_is_arabic:
+            current_span.append(item)
+        else:
+            spans.append(current_span)
+            current_span = [item]
+            current_is_arabic = item_is_arabic
+
+    if current_span:
+        spans.append(current_span)
+
+    merged_parts: list[str] = []
+
+    for span in spans:
+        if _is_arabic_token(span[0]["text"]):
+            span = sorted(span, key=lambda item: item["left"], reverse=True)
+        else:
+            span = sorted(span, key=lambda item: item["left"])
+
+        merged_parts.extend(item["text"] for item in span)
+
+    return " ".join(merged_parts).strip()
 
 
 def parse_text_to_blocks(raw_text: str, confidence: float = 0.99) -> list[OCRBlock]:
@@ -117,9 +173,7 @@ def parse_tesseract_data(data: dict[str, list[Any]]) -> list[OCRBlock]:
     blocks: list[OCRBlock] = []
 
     for line_index, items in enumerate(sorted_groups, start=1):
-        items = sorted(items, key=lambda item: item["left"])
-
-        merged_text = " ".join(item["text"] for item in items).strip()
+        merged_text = _merge_items_preserve_script_direction(items)
         if not merged_text:
             continue
 
