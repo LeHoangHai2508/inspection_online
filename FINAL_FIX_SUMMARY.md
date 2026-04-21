@@ -8,10 +8,13 @@
 3. ✅ Side2 clipLimit=2.0
 4. ✅ Side1 thêm chi_sim
 
-### Batch 2: 3 vấn đề Arabic & CJK (MỚI)
+### Batch 2: 3 vấn đề Arabic & CJK
 5. ✅ Parser xử lý Arabic theo span (không hardcode)
 6. ✅ Bỏ threshold side2 (giữ nét CJK nhỏ)
 7. ✅ PSM 11 cho side2 (sparse text)
+
+### Batch 3: 2-Pass OCR cho side2 (MỚI NHẤT)
+8. ✅ **2-pass OCR cho side2** - Tối ưu phần cuối CJK
 
 ---
 

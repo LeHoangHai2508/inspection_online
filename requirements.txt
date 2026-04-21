@@ -16,3 +16,4 @@ jinja2
 aiofiles
 paddlepaddle
 pytesseract
+pytesseract pillow

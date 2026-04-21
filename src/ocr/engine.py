@@ -17,7 +17,7 @@ os.environ['FLAGS_use_mkldnn'] = '0'
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 from src.domain.enums import InspectionSide
-from src.domain.models import OCRBlock, TemplateUploadFile
+from src.domain.models import BoundingBox, OCRBlock, TemplateUploadFile
 from src.ocr.parser import (
     parse_paddle_output,
     parse_tesseract_data,
@@ -253,15 +253,95 @@ class TesseractOCREngine(BaseOCREngine):
         import pytesseract  # type: ignore
         from PIL import Image  # type: ignore
 
+        print(f"[OCR] backend=pytesseract, side={side.value}")
+
         with _materialize_input(file) as input_path:
             # Side2 dùng heavy preprocessing, Side1 dùng light
             heavy = side == InspectionSide.SIDE2
             image = _preprocess_for_tesseract(input_path, heavy=heavy)
             
-            # side1 đơn giản hơn -> psm 6
-            # side2 nhiều block/ngôn ngữ/sparse text -> psm 11
-            psm = "6" if side == InspectionSide.SIDE1 else "11"
             lang = self._lang_for_side(side)
+            
+            # Side2: 2-pass OCR để xử lý phần cuối tốt hơn
+            if side == InspectionSide.SIDE2:
+                print(f"[OCR] side2: 2-pass mode")
+                
+                # Pass 1: OCR toàn ảnh
+                print(f"[OCR] pass1: full image, psm=11, lang={lang}")
+                data1 = pytesseract.image_to_data(
+                    image,
+                    lang=lang,
+                    output_type=pytesseract.Output.DICT,
+                    config=f"--oem 3 --psm 11 -c preserve_interword_spaces=1",
+                )
+                main_blocks = parse_tesseract_data(data1)
+                
+                # Pass 2: Crop 35% cuối, OCR lại với config tối ưu cho CJK
+                width, height = image.size
+                crop_top = int(height * 0.65)
+                tail_image = image.crop((0, crop_top, width, height))
+                
+                # Lang cho phần cuối: ưu tiên CJK
+                tail_lang = "chi_sim+chi_tra+jpn+kor+eng+rus+tha"
+                print(f"[OCR] pass2: bottom 35%, psm=11, lang={tail_lang}")
+                
+                data2 = pytesseract.image_to_data(
+                    tail_image,
+                    lang=tail_lang,
+                    output_type=pytesseract.Output.DICT,
+                    config=f"--oem 3 --psm 11 -c preserve_interword_spaces=1",
+                )
+                tail_blocks = parse_tesseract_data(data2)
+                
+                # Offset bbox của tail_blocks về hệ tọa độ ảnh gốc
+                adjusted_tail_blocks = []
+                for block in tail_blocks:
+                    adjusted_tail_blocks.append(
+                        OCRBlock(
+                            text=block.text,
+                            bbox=BoundingBox(
+                                block.bbox.x1,
+                                block.bbox.y1 + crop_top,
+                                block.bbox.x2,
+                                block.bbox.y2 + crop_top,
+                            ),
+                            confidence=block.confidence,
+                            line_index=block.line_index,
+                        )
+                    )
+                
+                # Merge: bỏ main_blocks ở vùng cuối, thay bằng tail_blocks
+                merged_blocks = [
+                    block for block in main_blocks if block.bbox.y2 < crop_top
+                ] + adjusted_tail_blocks
+                
+                # Re-sort và tạo lại blocks với line_index mới
+                merged_blocks = sorted(merged_blocks, key=lambda b: (b.bbox.y1, b.bbox.x1))
+                
+                # Tạo lại blocks với line_index đúng (vì frozen dataclass)
+                final_blocks = []
+                for i, block in enumerate(merged_blocks, start=1):
+                    final_blocks.append(
+                        OCRBlock(
+                            text=block.text,
+                            bbox=block.bbox,
+                            confidence=block.confidence,
+                            line_index=i,
+                        )
+                    )
+                
+                print(f"[OCR] merged: {len(main_blocks)} main + {len(adjusted_tail_blocks)} tail = {len(final_blocks)} total")
+                
+                return OCRDocument(
+                    side=side,
+                    raw_text=render_blocks_to_text(final_blocks),
+                    blocks=final_blocks,
+                    engine_name=self.engine_name,
+                )
+            
+            # Side1: single pass
+            psm = "6"
+            print(f"[OCR] psm={psm}, lang={lang}")
             
             data = pytesseract.image_to_data(
                 image,
@@ -269,15 +349,19 @@ class TesseractOCREngine(BaseOCREngine):
                 output_type=pytesseract.Output.DICT,
                 config=f"--oem 3 --psm {psm} -c preserve_interword_spaces=1",
             )
-        blocks = parse_tesseract_data(data)
-        return OCRDocument(
-            side=side,
-            raw_text=render_blocks_to_text(blocks),
-            blocks=blocks,
-            engine_name=self.engine_name,
-        )
+            blocks = parse_tesseract_data(data)
+            print(f"[OCR] parsed {len(blocks)} blocks")
+            
+            return OCRDocument(
+                side=side,
+                raw_text=render_blocks_to_text(blocks),
+                blocks=blocks,
+                engine_name=self.engine_name,
+            )
 
     def _run_with_cli(self, side: InspectionSide, file: TemplateUploadFile) -> OCRDocument:
+        print(f"[OCR] backend=cli (FALLBACK), side={side.value}")
+        
         with _materialize_input(file) as input_path:
             psm = "6" if side == InspectionSide.SIDE1 else "11"
             lang = self._lang_for_side(side)
