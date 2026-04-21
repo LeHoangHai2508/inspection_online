@@ -85,15 +85,11 @@ class MockOCREngine(BaseOCREngine):
             return content.decode("utf-8", errors="ignore") or f"BINARY_FILE:{filename}"
 
 
-def _preprocess_for_tesseract(
-    input_path: Path,
-    heavy: bool = True,
-    use_denoise: bool = False,
-):
+def _preprocess_for_tesseract(input_path: Path, heavy: bool = True):
     """
     Preprocess ảnh cho Tesseract.
     - side1: nhẹ, giữ nét
-    - side2: mạnh hơn, nhưng mặc định không denoise để tránh mất nét chữ nhỏ
+    - side2: scale 2x + CLAHE + threshold, không denoise để tránh mất nét chữ nhỏ
     """
     from PIL import Image  # type: ignore
 
@@ -103,6 +99,7 @@ def _preprocess_for_tesseract(
 
     if heavy:
         # Side2: chữ nhỏ, nhiều ngôn ngữ
+        # Scale 2x để chữ nhỏ rõ hơn
         image = cv2.resize(
             image,
             None,
@@ -111,9 +108,10 @@ def _preprocess_for_tesseract(
             interpolation=cv2.INTER_CUBIC,
         )
 
-        clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         image = clahe.apply(image)
 
+        # Threshold để tách nét chữ
         _, image = cv2.threshold(
             image,
             0,
@@ -121,9 +119,8 @@ def _preprocess_for_tesseract(
             cv2.THRESH_BINARY + cv2.THRESH_OTSU,
         )
 
-        if use_denoise:
-            image = cv2.fastNlMeansDenoising(image, None, 10, 7, 21)
-
+        # Tắt denoise vì đang làm mất nét nhỏ, dấu chấm, chữ đa ngôn ngữ
+        # image = cv2.fastNlMeansDenoising(image, None, 10, 7, 21)
     else:
         # Side1: chữ lớn hơn, chỉ cần contrast nhẹ
         clahe = cv2.createCLAHE(clipLimit=1.0, tileGridSize=(8, 8))
@@ -251,11 +248,7 @@ class TesseractOCREngine(BaseOCREngine):
         with _materialize_input(file) as input_path:
             # Side2 dùng heavy preprocessing, Side1 dùng light
             heavy = side == InspectionSide.SIDE2
-            image = _preprocess_for_tesseract(
-                input_path,
-                heavy=heavy,
-                use_denoise=False,
-            )
+            image = _preprocess_for_tesseract(input_path, heavy=heavy)
             
             # side1 đơn giản hơn -> psm 6
             # side2 nhiều block/ngôn ngữ -> psm 4

@@ -2,7 +2,34 @@
 
 ## Tóm tắt
 
-Đã tách riêng symbol recognition khỏi OCR text branch và cải thiện preprocessing cho Tesseract.
+Đã tách riêng symbol recognition khỏi OCR text branch và **sửa 5 lỗi nghiêm trọng** trong OCR preprocessing.
+
+## ⚠️ 5 lỗi OCR đã sửa (CRITICAL)
+
+### 1. ❌ Side2 không scale thực tế
+- **Lỗi**: Comment "Scale 2x" nhưng code `fx=1.0, fy=1.0`
+- **Sửa**: Đổi thành `fx=2.0, fy=2.0`
+- **Impact**: Chữ nhỏ ở side2 giờ được phóng to đúng
+
+### 2. ❌ Denoise làm mất nét chữ nhỏ
+- **Lỗi**: `cv2.fastNlMeansDenoising()` làm mất dấu chấm, nét mảnh
+- **Sửa**: Tắt denoise hoàn toàn
+- **Impact**: Giữ được chi tiết chữ Trung/Nhật/Hàn/Thái/Ả Rập
+
+### 3. ❌ PSM mode không phù hợp
+- **Lỗi**: Cả 2 sides đều dùng PSM 3 (fully automatic)
+- **Sửa**: Side1 dùng PSM 6, Side2 dùng PSM 4
+- **Impact**: Không còn đảo thứ tự từ, đọc layout đúng hơn
+
+### 4. ❌ OCR quá nhiều ngôn ngữ cùng lúc
+- **Lỗi**: Dùng chung 1 chuỗi lang cho cả 2 sides
+- **Sửa**: Dùng `side_langs` trong config
+- **Impact**: Nhanh hơn, chính xác hơn
+
+### 5. ❌ CLAHE clipLimit quá cao
+- **Lỗi**: Side2 dùng `clipLimit=2.5`
+- **Sửa**: Giảm xuống `clipLimit=2.0`
+- **Impact**: Không bị "cháy" contrast
 
 ## Các thay đổi chi tiết
 
