@@ -7,11 +7,17 @@ from src.ocr.postprocess import (
     extract_candidate_fields,
     extract_runtime_observed_fields,
 )
+from src.symbol.run_symbol import SymbolWorkflow
 
 
 class OCRWorkflow:
-    def __init__(self, engine: AutoOCREngine | None = None) -> None:
+    def __init__(
+        self,
+        engine: AutoOCREngine | None = None,
+        symbol_workflow: SymbolWorkflow | None = None,
+    ) -> None:
         self._engine = engine or AutoOCREngine()
+        self._symbol_workflow = symbol_workflow or SymbolWorkflow()
 
     def run_template_ocr(
         self,
@@ -34,8 +40,9 @@ class OCRWorkflow:
                 media_type=capture.media_type,
             ),
         )
-        observed_fields = extract_runtime_observed_fields(document.blocks)
-        observed_fields = [
+
+        text_fields = extract_runtime_observed_fields(document.blocks)
+        text_fields = [
             ObservedField(
                 field_name=field.field_name,
                 value=field.value,
@@ -43,8 +50,12 @@ class OCRWorkflow:
                 bbox=field.bbox,
                 camera_source=capture.camera_id,
             )
-            for field in observed_fields
+            for field in text_fields
         ]
+
+        symbol_fields = self._symbol_workflow.run_capture_symbol(capture)
+
+        observed_fields = text_fields + symbol_fields
         return document.raw_text, document.blocks, observed_fields
 
     def run_runtime_ocr(

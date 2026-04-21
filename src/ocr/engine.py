@@ -85,11 +85,15 @@ class MockOCREngine(BaseOCREngine):
             return content.decode("utf-8", errors="ignore") or f"BINARY_FILE:{filename}"
 
 
-def _preprocess_for_tesseract(input_path: Path, heavy: bool = True):
+def _preprocess_for_tesseract(
+    input_path: Path,
+    heavy: bool = True,
+    use_denoise: bool = False,
+):
     """
-    Preprocess ảnh để cải thiện chất lượng OCR.
-    - heavy=False (side1): Không scale, chỉ CLAHE nhẹ
-    - heavy=True (side2): Scale 2x, CLAHE + threshold mạnh hơn
+    Preprocess ảnh cho Tesseract.
+    - side1: nhẹ, giữ nét
+    - side2: mạnh hơn, nhưng mặc định không denoise để tránh mất nét chữ nhỏ
     """
     from PIL import Image  # type: ignore
 
@@ -98,34 +102,30 @@ def _preprocess_for_tesseract(input_path: Path, heavy: bool = True):
         raise RuntimeError(f"Cannot read image for OCR: {input_path}")
 
     if heavy:
-        # Side 2: chữ nhỏ, nhiều ngôn ngữ → cần preprocessing mạnh
-        # Scale 2x để chữ nhỏ rõ hơn
+        # Side2: chữ nhỏ, nhiều ngôn ngữ
         image = cv2.resize(
             image,
             None,
-            fx=1.0,
-            fy=1.0,
+            fx=2.0,
+            fy=2.0,
             interpolation=cv2.INTER_CUBIC,
         )
-        
-        # CLAHE mạnh hơn cho side 2
+
         clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
         image = clahe.apply(image)
-        
-        # Otsu threshold cho side 2 (text nhỏ cần nhị phân rõ)
+
         _, image = cv2.threshold(
             image,
             0,
             255,
             cv2.THRESH_BINARY + cv2.THRESH_OTSU,
         )
-        
-        # Denoise nhẹ
-        image = cv2.fastNlMeansDenoising(image, None, 10, 7, 21)
+
+        if use_denoise:
+            image = cv2.fastNlMeansDenoising(image, None, 10, 7, 21)
+
     else:
-        # Side 1: chữ to, rõ ràng → preprocessing nhẹ
-        # Không scale, giữ nguyên kích thước
-        # Chỉ CLAHE nhẹ để tăng contrast
+        # Side1: chữ lớn hơn, chỉ cần contrast nhẹ
         clahe = cv2.createCLAHE(clipLimit=1.0, tileGridSize=(8, 8))
         image = clahe.apply(image)
 
@@ -251,20 +251,22 @@ class TesseractOCREngine(BaseOCREngine):
         with _materialize_input(file) as input_path:
             # Side2 dùng heavy preprocessing, Side1 dùng light
             heavy = side == InspectionSide.SIDE2
-            image = _preprocess_for_tesseract(input_path, heavy=heavy)
+            image = _preprocess_for_tesseract(
+                input_path,
+                heavy=heavy,
+                use_denoise=False,
+            )
             
-            # Cả 2 sides đều dùng PSM 3 (fully automatic) để Tesseract tự phát hiện layout
-            # PSM 3 tốt hơn cho cả text đơn giản và phức tạp
-            psm = "3"
-            
-            # Lấy ngôn ngữ phù hợp cho side
+            # side1 đơn giản hơn -> psm 6
+            # side2 nhiều block/ngôn ngữ -> psm 4
+            psm = "6" if side == InspectionSide.SIDE1 else "4"
             lang = self._lang_for_side(side)
             
             data = pytesseract.image_to_data(
                 image,
                 lang=lang,
                 output_type=pytesseract.Output.DICT,
-                config=f"--oem 3 --psm {psm}",
+                config=f"--oem 3 --psm {psm} -c preserve_interword_spaces=1",
             )
         blocks = parse_tesseract_data(data)
         return OCRDocument(
@@ -276,10 +278,7 @@ class TesseractOCREngine(BaseOCREngine):
 
     def _run_with_cli(self, side: InspectionSide, file: TemplateUploadFile) -> OCRDocument:
         with _materialize_input(file) as input_path:
-            # PSM 3 (fully automatic) cho cả 2 sides
-            psm = "3"
-            
-            # Lấy ngôn ngữ phù hợp cho side
+            psm = "6" if side == InspectionSide.SIDE1 else "4"
             lang = self._lang_for_side(side)
             
             result = subprocess.run(
