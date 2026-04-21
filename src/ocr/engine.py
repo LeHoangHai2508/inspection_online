@@ -85,17 +85,11 @@ class MockOCREngine(BaseOCREngine):
             return content.decode("utf-8", errors="ignore") or f"BINARY_FILE:{filename}"
 
 
-def _preprocess_for_tesseract(
-    input_path: Path,
-    heavy: bool = True,
-    use_denoise: bool = False,
-):
+def _preprocess_for_tesseract(input_path: Path, heavy: bool = True):
     """
     Preprocess ảnh cho Tesseract.
-    
-    Quy ước:
-    - side1: ảnh dễ hơn, nhưng vẫn cần phóng to nhẹ để giữ chữ nhỏ
-    - side2: ảnh khó hơn, nhiều ngôn ngữ hơn, cần preprocess mạnh hơn
+    - side1: resize nhẹ + CLAHE để giữ chữ nhỏ ở cuối nhãn
+    - side2: scale 2x + CLAHE + threshold
     """
     from PIL import Image  # type: ignore
 
@@ -104,7 +98,7 @@ def _preprocess_for_tesseract(
         raise RuntimeError(f"Cannot read image for OCR: {input_path}")
 
     if heavy:
-        # Side2: scale mạnh hơn vì chữ nhỏ và nhiều ngôn ngữ
+        # Side2: chữ nhỏ, nhiều ngôn ngữ
         image = cv2.resize(
             image,
             None,
@@ -113,7 +107,7 @@ def _preprocess_for_tesseract(
             interpolation=cv2.INTER_CUBIC,
         )
 
-        clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         image = clahe.apply(image)
 
         _, image = cv2.threshold(
@@ -123,11 +117,10 @@ def _preprocess_for_tesseract(
             cv2.THRESH_BINARY + cv2.THRESH_OTSU,
         )
 
-        if use_denoise:
-            image = cv2.fastNlMeansDenoising(image, None, 10, 7, 21)
-
+        # Tắt denoise để không mất nét nhỏ
+        # image = cv2.fastNlMeansDenoising(image, None, 10, 7, 21)
     else:
-        # Side1: thêm resize nhẹ để không mất phần chữ nhỏ ở cuối nhãn
+        # Side1: thêm resize nhẹ để giữ nét phần cuối nhãn
         image = cv2.resize(
             image,
             None,
@@ -261,11 +254,7 @@ class TesseractOCREngine(BaseOCREngine):
         with _materialize_input(file) as input_path:
             # Side2 dùng heavy preprocessing, Side1 dùng light
             heavy = side == InspectionSide.SIDE2
-            image = _preprocess_for_tesseract(
-                input_path,
-                heavy=heavy,
-                use_denoise=False,
-            )
+            image = _preprocess_for_tesseract(input_path, heavy=heavy)
             
             # side1 đơn giản hơn -> psm 6
             # side2 nhiều block/ngôn ngữ -> psm 4
