@@ -85,11 +85,17 @@ class MockOCREngine(BaseOCREngine):
             return content.decode("utf-8", errors="ignore") or f"BINARY_FILE:{filename}"
 
 
-def _preprocess_for_tesseract(input_path: Path, heavy: bool = True):
+def _preprocess_for_tesseract(
+    input_path: Path,
+    heavy: bool = True,
+    use_denoise: bool = False,
+):
     """
     Preprocess ảnh cho Tesseract.
-    - side1: nhẹ, giữ nét
-    - side2: scale 2x + CLAHE + threshold, không denoise để tránh mất nét chữ nhỏ
+    
+    Quy ước:
+    - side1: ảnh dễ hơn, nhưng vẫn cần phóng to nhẹ để giữ chữ nhỏ
+    - side2: ảnh khó hơn, nhiều ngôn ngữ hơn, cần preprocess mạnh hơn
     """
     from PIL import Image  # type: ignore
 
@@ -98,8 +104,7 @@ def _preprocess_for_tesseract(input_path: Path, heavy: bool = True):
         raise RuntimeError(f"Cannot read image for OCR: {input_path}")
 
     if heavy:
-        # Side2: chữ nhỏ, nhiều ngôn ngữ
-        # Scale 2x để chữ nhỏ rõ hơn
+        # Side2: scale mạnh hơn vì chữ nhỏ và nhiều ngôn ngữ
         image = cv2.resize(
             image,
             None,
@@ -108,10 +113,9 @@ def _preprocess_for_tesseract(input_path: Path, heavy: bool = True):
             interpolation=cv2.INTER_CUBIC,
         )
 
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
         image = clahe.apply(image)
 
-        # Threshold để tách nét chữ
         _, image = cv2.threshold(
             image,
             0,
@@ -119,11 +123,20 @@ def _preprocess_for_tesseract(input_path: Path, heavy: bool = True):
             cv2.THRESH_BINARY + cv2.THRESH_OTSU,
         )
 
-        # Tắt denoise vì đang làm mất nét nhỏ, dấu chấm, chữ đa ngôn ngữ
-        # image = cv2.fastNlMeansDenoising(image, None, 10, 7, 21)
+        if use_denoise:
+            image = cv2.fastNlMeansDenoising(image, None, 10, 7, 21)
+
     else:
-        # Side1: chữ lớn hơn, chỉ cần contrast nhẹ
-        clahe = cv2.createCLAHE(clipLimit=1.0, tileGridSize=(8, 8))
+        # Side1: thêm resize nhẹ để không mất phần chữ nhỏ ở cuối nhãn
+        image = cv2.resize(
+            image,
+            None,
+            fx=1.6,
+            fy=1.6,
+            interpolation=cv2.INTER_CUBIC,
+        )
+
+        clahe = cv2.createCLAHE(clipLimit=1.2, tileGridSize=(8, 8))
         image = clahe.apply(image)
 
     return Image.fromarray(image)
@@ -248,7 +261,11 @@ class TesseractOCREngine(BaseOCREngine):
         with _materialize_input(file) as input_path:
             # Side2 dùng heavy preprocessing, Side1 dùng light
             heavy = side == InspectionSide.SIDE2
-            image = _preprocess_for_tesseract(input_path, heavy=heavy)
+            image = _preprocess_for_tesseract(
+                input_path,
+                heavy=heavy,
+                use_denoise=False,
+            )
             
             # side1 đơn giản hơn -> psm 6
             # side2 nhiều block/ngôn ngữ -> psm 4

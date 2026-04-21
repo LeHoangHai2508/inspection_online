@@ -1,7 +1,7 @@
 engine: tesseract
 # Tách ngôn ngữ theo side để tăng tốc độ và độ chính xác
 side_langs:
-  side1: eng+fra+deu+ita+spa+por+rus+ara
+  side1: eng+fra+deu+ita+spa+por+rus+ara+chi_sim
   side2: eng+jpn+chi_sim+chi_tra+kor+tha+vie+rus
 lang: eng
 use_angle_cls: true

@@ -1,6 +1,26 @@
-# Quick Test - Sau khi sửa 5 lỗi OCR
+# Quick Test - Sau khi sửa 3 lỗi gốc + 5 lỗi OCR
 
-## Đã sửa gì?
+## ⚠️ 3 Lỗi Gốc Đã Sửa (MỚI)
+
+### ✅ 1. Parser group theo line thật
+```python
+# Trước: Mỗi token 1 block, tự ghép dòng bằng threshold Y
+# Sau:   Group token theo (block_num, par_num, line_num) từ Tesseract
+```
+
+### ✅ 2. Side1 resize 1.6x
+```python
+# Trước: Side1 không resize → mất chữ nhỏ ở cuối
+# Sau:   Side1 resize 1.6x để giữ chữ nhỏ
+```
+
+### ✅ 3. Side1 thêm chi_sim
+```yaml
+# Trước: side1: eng+fra+...+ara (không có chi_sim)
+# Sau:   side1: eng+fra+...+ara+chi_sim
+```
+
+## Đã sửa gì? (Tổng hợp)
 
 ### ✅ 1. Scale 2x cho side2
 ```python
@@ -55,6 +75,9 @@ python -m uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
 - ✅ Đọc đúng thứ tự: "Made in Vietnam" (không phải "Made Vietnam")
 - ✅ Giữ được spaces giữa các từ
 - ✅ Đọc được ngôn ngữ châu Âu + Ả Rập
+- ✅ **KHÔNG mất chữ ở đoạn cuối** (nhờ resize 1.6x)
+- ✅ **Thứ tự dòng đúng** (nhờ parser mới)
+- ✅ **Đọc được chữ Trung: 中国 170/76A** (nhờ chi_sim)
 
 **Side2 (mặt sau):**
 - ✅ Đọc được chữ nhỏ
@@ -62,6 +85,7 @@ python -m uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
 - ✅ Không bị vỡ dòng quá nhiều
 - ✅ Giữ được dấu chấm, dấu phẩy
 - ✅ Không bị lẫn glyph giữa các ngôn ngữ
+- ✅ **Thứ tự dòng đúng** (nhờ parser mới)
 
 ## Nếu vẫn sai
 
@@ -99,15 +123,21 @@ use_angle_cls: true
 
 ## Files đã sửa
 
+### 3 Lỗi Gốc (MỚI)
+- ✅ `src/ocr/parser.py` - **TOÀN BỘ** parse_tesseract_data() và render_blocks_to_text()
+- ✅ `src/ocr/engine.py` - Side1 resize 1.6x + CLAHE 1.2
+- ✅ `configs/ocr.yaml` - Side1 thêm chi_sim
+
+### 5 Lỗi OCR (TRƯỚC)
 - ✅ `src/ocr/engine.py` - Preprocessing + PSM
-- ✅ `configs/ocr.yaml` - Đã có side_langs
 - ✅ `src/symbol/` - Symbol detection module (mới)
 - ✅ `src/ocr/run_ocr.py` - Integration symbol
 - ✅ `src/compare/compare_symbols.py` - Set comparison
 
 ## Docs
 
-- 📖 `docs/OCR_FIXES.md` - Chi tiết 5 lỗi
+- 📖 `docs/OCR_ROOT_FIXES.md` - **Chi tiết 3 lỗi gốc (MỚI)**
+- 📖 `docs/OCR_FIXES.md` - Chi tiết 5 lỗi OCR
 - 📖 `docs/SYMBOL_RECOGNITION.md` - Hướng dẫn symbol
 - 📖 `docs/CHANGELOG_SYMBOL.md` - Changelog đầy đủ
 
@@ -123,18 +153,28 @@ Chi tiết xem: `docs/SYMBOL_RECOGNITION.md`
 
 ## Expected Results
 
-### Trước (5 lỗi)
+### Trước (3 lỗi gốc + 5 lỗi OCR)
 ```
 Side1: "Made Vietnam" ❌
+       Dòng cuối bị mất ❌
+       Dòng dưới in trước dòng trên ❌
+       "中国" → "???" (không đọc được) ❌
+       
 Side2: "洗濯 機 可 能" (vỡ dòng) ❌
        "30°C" → "30 C" (mất dấu) ❌
+       Thứ tự dòng sai ❌
 ```
 
-### Sau (đã sửa)
+### Sau (đã sửa TẤT CẢ)
 ```
 Side1: "Made in Vietnam" ✅
+       "中国 170/76A" ✅
+       Thứ tự dòng đúng ✅
+       Giữ được chữ cuối ✅
+       
 Side2: "洗濯機可能" ✅
        "30°C" ✅
+       Thứ tự dòng đúng ✅
 ```
 
 ## Performance
