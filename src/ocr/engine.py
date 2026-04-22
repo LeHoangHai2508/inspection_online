@@ -11,6 +11,7 @@ from typing import Any
 
 import cv2
 import numpy as np
+from PIL import Image
 
 # Set environment variables BEFORE any paddle imports
 os.environ['FLAGS_use_mkldnn'] = '0'
@@ -137,6 +138,67 @@ def _preprocess_for_tesseract(input_path: Path, heavy: bool = True):
     return Image.fromarray(image)
 
 
+def _crop_footer_for_side(side: InspectionSide, image: "Image.Image") -> "Image.Image":
+    """
+    Cắt bỏ footer nhiễu trước OCR.
+    - side1: không cắt footer vì phần cuối còn text composition quan trọng
+    - side2: cắt khoảng 10% đáy ảnh để bỏ VERSO 2 và các vạch tím
+    """
+    from PIL import Image  # type: ignore
+    
+    width, height = image.size
+
+    if side == InspectionSide.SIDE2:
+        crop_bottom = int(height * 0.90)
+        return image.crop((0, 0, width, crop_bottom))
+
+    return image
+
+
+def _ocr_image_to_blocks(image: "Image.Image", lang: str, psm: str) -> list[OCRBlock]:
+    """
+    OCR một ảnh PIL và trả về OCR blocks bằng đúng parser hiện tại.
+    Hàm này dùng lại cho pass chính và các pass phụ.
+    """
+    import pytesseract  # type: ignore
+
+    data = pytesseract.image_to_data(
+        image,
+        lang=lang,
+        output_type=pytesseract.Output.DICT,
+        config=f"--oem 3 --psm {psm} -c preserve_interword_spaces=1",
+    )
+    return parse_tesseract_data(data)
+
+
+def _offset_blocks(blocks: list[OCRBlock], dx: int = 0, dy: int = 0) -> list[OCRBlock]:
+    """Offset bbox của blocks theo dx, dy"""
+    adjusted: list[OCRBlock] = []
+
+    for block in blocks:
+        adjusted.append(
+            OCRBlock(
+                text=block.text,
+                bbox=BoundingBox(
+                    block.bbox.x1 + dx,
+                    block.bbox.y1 + dy,
+                    block.bbox.x2 + dx,
+                    block.bbox.y2 + dy,
+                ),
+                confidence=block.confidence,
+                line_index=block.line_index,
+            )
+        )
+
+    return adjusted
+
+
+def _contains_arabic(text: str) -> bool:
+    """Kiểm tra text có chứa ký tự Arabic"""
+    import re
+    return bool(re.search(r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]", text or ""))
+
+
 def _list_installed_tesseract_langs() -> list[str]:
     """
     Lấy danh sách language packs đã cài trong máy từ:
@@ -204,6 +266,92 @@ def _normalize_tesseract_lang_spec(lang: str | None) -> str:
     return "+".join(installed)
 
 
+def _detect_gpu_available() -> bool:
+    """
+    Tự động detect GPU có available không.
+    Kiểm tra cả PyTorch (EasyOCR) và TensorFlow (KerasOCR).
+    """
+    pytorch_gpu = False
+    tensorflow_gpu = False
+    
+    # Check PyTorch CUDA
+    try:
+        import torch
+        pytorch_gpu = torch.cuda.is_available()
+    except Exception:
+        pass
+    
+    # Check TensorFlow GPU
+    try:
+        import tensorflow as tf
+        gpus = tf.config.list_physical_devices('GPU')
+        tensorflow_gpu = len(gpus) > 0
+    except Exception:
+        pass
+    
+    # Cả 2 phải có GPU mới return True
+    has_gpu = pytorch_gpu and tensorflow_gpu
+    
+    if has_gpu:
+        print(f"[GPU] Auto-detected: PyTorch CUDA={pytorch_gpu}, TensorFlow GPU={tensorflow_gpu} → Using GPU")
+    else:
+        print(f"[GPU] Auto-detected: PyTorch CUDA={pytorch_gpu}, TensorFlow GPU={tensorflow_gpu} → Using CPU")
+    
+    return has_gpu
+
+
+def _resolve_gpu_setting(gpu_config: str | bool) -> bool:
+    """
+    Resolve GPU setting từ config.
+    
+    Args:
+        gpu_config: "auto", "true", "false", True, False
+    
+    Returns:
+        bool: True nếu dùng GPU, False nếu dùng CPU
+    """
+    if isinstance(gpu_config, bool):
+        return gpu_config
+    
+    gpu_str = str(gpu_config).lower().strip()
+    
+    if gpu_str == "auto":
+        return _detect_gpu_available()
+    
+    if gpu_str in {"true", "1", "yes", "on"}:
+        return True
+    
+    return False
+
+
+def _preprocess_for_ensemble(input_path: Path, side: InspectionSide) -> np.ndarray:
+    """
+    Preprocess nhẹ cho EasyOCR primary.
+    Không threshold mạnh để tránh giết nét Arabic/CJK nhỏ.
+    """
+    image = cv2.imread(str(input_path), cv2.IMREAD_COLOR)
+    if image is None:
+        raise RuntimeError(f"Cannot read image for OCR: {input_path}")
+
+    # Crop footer noise cho side2 để tránh dính RECTO/VERSO
+    if side == InspectionSide.SIDE2:
+        h, w = image.shape[:2]
+        crop_bottom = int(h * 0.90)
+        image = image[:crop_bottom, :]
+
+    # Resize nhẹ để giữ chi tiết
+    scale = 1.6 if side == InspectionSide.SIDE1 else 2.0
+    image = cv2.resize(
+        image,
+        None,
+        fx=scale,
+        fy=scale,
+        interpolation=cv2.INTER_CUBIC,
+    )
+
+    return image
+
+
 class PaddleOCREngine(BaseOCREngine):
     engine_name = "paddleocr"
 
@@ -223,6 +371,250 @@ class PaddleOCREngine(BaseOCREngine):
             side=side,
             raw_text=render_blocks_to_text(blocks),
             blocks=blocks,
+            engine_name=self.engine_name,
+        )
+
+
+class EasyOCREngine(BaseOCREngine):
+    engine_name = "easyocr"
+
+    def __init__(self, langs: list[str], gpu: bool = True) -> None:
+        if importlib.util.find_spec("easyocr") is None:
+            raise RuntimeError("easyocr is not installed.")
+
+        import easyocr  # type: ignore
+        
+        print(f"[EasyOCR] Initializing with GPU={gpu}, langs={langs}")
+        self._reader = easyocr.Reader(langs, gpu=gpu)
+        self._gpu = gpu
+
+    def run(self, side: InspectionSide, file: TemplateUploadFile) -> OCRDocument:
+        print(f"[EasyOCR] Running OCR on {side.value} (GPU={self._gpu})")
+        
+        with _materialize_input(file) as input_path:
+            image = _preprocess_for_ensemble(input_path, side)
+            result = self._reader.readtext(image, detail=1)
+
+        blocks: list[OCRBlock] = []
+
+        for idx, item in enumerate(result, start=1):
+            # EasyOCR: [bbox_points, text, confidence]
+            bbox_points, text, confidence = item
+            xs = [int(point[0]) for point in bbox_points]
+            ys = [int(point[1]) for point in bbox_points]
+
+            blocks.append(
+                OCRBlock(
+                    text=str(text).strip(),
+                    bbox=BoundingBox(min(xs), min(ys), max(xs), max(ys)),
+                    confidence=float(confidence),
+                    line_index=idx,
+                )
+            )
+
+        print(f"[EasyOCR] Found {len(blocks)} blocks")
+        
+        return OCRDocument(
+            side=side,
+            raw_text=render_blocks_to_text(blocks),
+            blocks=blocks,
+            engine_name=self.engine_name,
+        )
+
+
+class KerasOCRVerifier:
+    """
+    Verifier cho hard blocks.
+    Không dùng cho toàn ảnh.
+    """
+    def __init__(self) -> None:
+        if importlib.util.find_spec("keras_ocr") is None:
+            raise RuntimeError("keras_ocr is not installed.")
+
+        import keras_ocr  # type: ignore
+        self._pipeline = keras_ocr.pipeline.Pipeline()
+
+    def verify(self, crop_bgr: np.ndarray) -> tuple[str, float]:
+        """
+        Trả về:
+        - text do KerasOCR đọc
+        - confidence heuristic
+        """
+        import keras_ocr  # type: ignore
+
+        # keras_ocr dùng RGB
+        crop_rgb = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2RGB)
+
+        predictions = self._pipeline.recognize([crop_rgb])[0]
+
+        if not predictions:
+            return "", 0.0
+
+        # predictions: list[(text, box)]
+        texts = []
+        for pred in predictions:
+            text = pred[0]
+            if text:
+                texts.append(text.strip())
+
+        merged = " ".join(texts).strip()
+        if not merged:
+            return "", 0.0
+
+        # KerasOCR không trả confidence chuẩn như EasyOCR,
+        # nên dùng heuristic đơn giản:
+        confidence = 0.75
+        return merged, confidence
+
+
+def _is_hard_block(
+    side: InspectionSide,
+    block: OCRBlock,
+    image_height: int,
+    min_confidence_to_skip: float,
+    min_block_width: int,
+    min_block_height: int,
+) -> bool:
+    width = block.bbox.x2 - block.bbox.x1
+    height = block.bbox.y2 - block.bbox.y1
+
+    if width < min_block_width or height < min_block_height:
+        return False
+
+    # block confidence thấp
+    if block.confidence < min_confidence_to_skip:
+        return True
+
+    # side1: block có Arabic
+    if side == InspectionSide.SIDE1:
+        if any("\u0600" <= ch <= "\u06FF" for ch in block.text):
+            return True
+
+    # side2: vùng cuối ảnh dễ lỗi Chinese/CJK
+    if side == InspectionSide.SIDE2:
+        if block.bbox.y1 >= int(image_height * 0.62):
+            return True
+
+    return False
+
+
+def _crop_block(image: np.ndarray, block: OCRBlock, pad: int = 4) -> np.ndarray:
+    h, w = image.shape[:2]
+
+    x1 = max(0, block.bbox.x1 - pad)
+    y1 = max(0, block.bbox.y1 - pad)
+    x2 = min(w, block.bbox.x2 + pad)
+    y2 = min(h, block.bbox.y2 + pad)
+
+    return image[y1:y2, x1:x2]
+
+
+def _should_replace_block(old_block: OCRBlock, new_text: str, new_confidence: float) -> bool:
+    if not new_text.strip():
+        return False
+
+    old_len = len(old_block.text.strip())
+    new_len = len(new_text.strip())
+
+    # verifier phải ít nhất không tệ hơn hẳn
+    if new_confidence < old_block.confidence and new_len < old_len:
+        return False
+
+    # nếu old confidence thấp, ưu tiên text mới dài và đầy hơn
+    if old_block.confidence < 0.75 and new_len >= old_len:
+        return True
+
+    # nếu text cũ quá ngắn hoặc rác
+    if old_len <= 2 and new_len > old_len:
+        return True
+
+    return False
+
+
+class EnsembleOCREngine(BaseOCREngine):
+    engine_name = "ensemble"
+
+    def __init__(
+        self,
+        easyocr_langs: list[str],
+        verifier_enabled: bool = True,
+        min_confidence_to_skip: float = 0.82,
+        min_block_width: int = 20,
+        min_block_height: int = 12,
+        max_blocks_per_image: int = 12,
+        gpu: bool = True,
+    ) -> None:
+        print(f"[Ensemble] Initializing with GPU={gpu}, verifier={verifier_enabled}")
+        
+        self._primary = EasyOCREngine(langs=easyocr_langs, gpu=gpu)
+        self._verifier = KerasOCRVerifier() if verifier_enabled else None
+        self._gpu = gpu
+
+        self._min_confidence_to_skip = min_confidence_to_skip
+        self._min_block_width = min_block_width
+        self._min_block_height = min_block_height
+        self._max_blocks_per_image = max_blocks_per_image
+
+    def run(self, side: InspectionSide, file: TemplateUploadFile) -> OCRDocument:
+        print(f"[Ensemble] Running on {side.value} (GPU={self._gpu})")
+        
+        with _materialize_input(file) as input_path:
+            image = _preprocess_for_ensemble(input_path, side)
+
+        primary_result = self._primary.run(side=side, file=file)
+
+        if self._verifier is None:
+            print(f"[Ensemble] Verifier disabled, returning primary result")
+            return primary_result
+
+        image_height = image.shape[0]
+
+        hard_blocks: list[OCRBlock] = [
+            block
+            for block in primary_result.blocks
+            if _is_hard_block(
+                side=side,
+                block=block,
+                image_height=image_height,
+                min_confidence_to_skip=self._min_confidence_to_skip,
+                min_block_width=self._min_block_width,
+                min_block_height=self._min_block_height,
+            )
+        ]
+
+        hard_blocks = hard_blocks[: self._max_blocks_per_image]
+        
+        print(f"[Ensemble] Found {len(hard_blocks)} hard blocks to verify")
+
+        replaced_map: dict[tuple[int, int, int, int], OCRBlock] = {}
+
+        for idx, block in enumerate(hard_blocks, start=1):
+            crop = _crop_block(image, block)
+            if crop.size == 0:
+                continue
+
+            new_text, new_conf = self._verifier.verify(crop)
+
+            if _should_replace_block(block, new_text, new_conf):
+                print(f"[Ensemble] Block {idx}/{len(hard_blocks)}: '{block.text[:20]}...' → '{new_text[:20]}...' (conf {block.confidence:.2f} → {new_conf:.2f})")
+                replaced_map[(block.bbox.x1, block.bbox.y1, block.bbox.x2, block.bbox.y2)] = OCRBlock(
+                    text=new_text,
+                    bbox=block.bbox,
+                    confidence=max(block.confidence, new_conf),
+                    line_index=block.line_index,
+                )
+
+        final_blocks: list[OCRBlock] = []
+        for block in primary_result.blocks:
+            key = (block.bbox.x1, block.bbox.y1, block.bbox.x2, block.bbox.y2)
+            final_blocks.append(replaced_map.get(key, block))
+
+        print(f"[Ensemble] Replaced {len(replaced_map)} blocks")
+
+        return OCRDocument(
+            side=side,
+            raw_text=render_blocks_to_text(final_blocks),
+            blocks=final_blocks,
             engine_name=self.engine_name,
         )
 
@@ -414,12 +806,37 @@ class AutoOCREngine(BaseOCREngine):
                 "lang": "en",
                 "use_angle_cls": True,
                 "strict_real_ocr": False,
+                "gpu": False,
+                "easyocr_langs": ["en"],
+                "verifier": {
+                    "enabled": True,
+                    "min_confidence_to_skip": 0.82,
+                    "min_block_width": 20,
+                    "min_block_height": 12,
+                    "max_blocks_per_image": 12,
+                },
             },
         )
         self._preferred_engine = preferred_engine or str(config.get("engine", "auto"))
         self._lang = str(config.get("lang", "en"))
         self._use_angle_cls = bool(config.get("use_angle_cls", True))
         self._side_langs = dict(config.get("side_langs", {}))
+        
+        # GPU config - auto-detect hoặc force
+        gpu_config = config.get("gpu", "auto")
+        self._gpu = _resolve_gpu_setting(gpu_config)
+        
+        # EasyOCR config
+        self._easyocr_langs = list(config.get("easyocr_langs", ["en"]))
+        
+        # Verifier config
+        verifier_config = dict(config.get("verifier", {}))
+        self._verifier_enabled = bool(verifier_config.get("enabled", True))
+        self._min_confidence_to_skip = float(verifier_config.get("min_confidence_to_skip", 0.82))
+        self._min_block_width = int(verifier_config.get("min_block_width", 20))
+        self._min_block_height = int(verifier_config.get("min_block_height", 12))
+        self._max_blocks_per_image = int(verifier_config.get("max_blocks_per_image", 12))
+        
         # Explicit argument wins over config file
         if strict_real_ocr is not None:
             self._strict = strict_real_ocr
@@ -443,7 +860,7 @@ class AutoOCREngine(BaseOCREngine):
             detail = f": {last_error}" if last_error else ""
             raise RuntimeError(
                 f"strict_real_ocr=True but no real OCR backend is available{detail}. "
-                "Install paddleocr or tesseract, or set strict_real_ocr=false in configs/ocr.yaml."
+                "Install easyocr, paddleocr or tesseract, or set strict_real_ocr=false in configs/ocr.yaml."
             )
 
         if last_error is not None:
@@ -454,14 +871,33 @@ class AutoOCREngine(BaseOCREngine):
 
     def _resolve_engine_order(self) -> list[str]:
         if self._preferred_engine == "auto":
-            return ["paddleocr", "tesseract", "mock"]
+            return ["ensemble", "easyocr", "paddleocr", "tesseract", "mock"]
         return [self._preferred_engine, "mock"]
 
     def _build_engine(self, engine_name: str) -> BaseOCREngine:
+        if engine_name == "ensemble":
+            return EnsembleOCREngine(
+                easyocr_langs=self._easyocr_langs,
+                verifier_enabled=self._verifier_enabled,
+                min_confidence_to_skip=self._min_confidence_to_skip,
+                min_block_width=self._min_block_width,
+                min_block_height=self._min_block_height,
+                max_blocks_per_image=self._max_blocks_per_image,
+                gpu=self._gpu,
+            )
+        
+        if engine_name == "easyocr":
+            return EasyOCREngine(
+                langs=self._easyocr_langs,
+                gpu=self._gpu,
+            )
+        
         if engine_name == "paddleocr":
             return PaddleOCREngine(lang=self._lang, use_angle_cls=self._use_angle_cls)
+        
         if engine_name == "tesseract":
             return TesseractOCREngine(lang=self._lang, side_langs=self._side_langs)
+        
         return MockOCREngine()
 
 

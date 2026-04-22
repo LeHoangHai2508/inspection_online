@@ -268,3 +268,18 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 
 python -m uvicorn src.api.main:app --reload --host 127.0.0.1 --port 8000
+
+
+check 
+
+# 1. Cài dependencies
+pip install -r requirements.txt
+
+# 2. Kiểm tra setup
+python check_ensemble_setup.py
+
+# 3. Test engine
+python test_ensemble_engine.py
+
+# 4. Start server
+python -m uvicorn src.api.main:app --reload --host 127.0.0.1 --port 8000

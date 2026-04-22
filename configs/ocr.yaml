@@ -1,15 +1,42 @@
-engine: tesseract
-# Tách ngôn ngữ theo side để tăng tốc độ và độ chính xác
-side_langs:
-  side1: eng+fra+deu+ita+spa+por+rus+ara+chi_sim
-  side2: eng+jpn+chi_sim+chi_tra+kor+tha+vie+rus
-lang: eng
-use_angle_cls: true
+engine: ensemble  # EasyOCR primary + KerasOCR verifier
+
+# GPU settings
+# auto = tự động detect GPU (khuyến nghị)
+# true = force GPU (lỗi nếu không có GPU)
+# false = force CPU
+gpu: auto
+
+easyocr_langs:
+  - en
+  - fr
+  - de
+  - it
+  - es
+  - pt
+  - ru
+  - ar
+  - ch_sim
+  - ch_tra
+  - ja
+  - ko
+  - th
+  - vi
+
+# Chỉ verify block khó
+verifier:
+  enabled: true
+  min_confidence_to_skip: 0.82
+  min_block_width: 20
+  min_block_height: 12
+  max_blocks_per_image: 12
+
 confidence_threshold: 0.75
-# strict_real_ocr: true  → fail hard nếu không có PaddleOCR/Tesseract (dùng cho prod)
+
+# strict_real_ocr: true  → fail hard nếu không có EasyOCR (dùng cho prod)
 # strict_real_ocr: false → fallback mock (dùng cho dev/local)
 strict_real_ocr: true
+
 providers:
-  - paddleocr
-  - tesseract
+  - ensemble
+  - easyocr
   - mock
