@@ -1,26 +1,31 @@
-engine: ensemble  # EasyOCR primary + KerasOCR verifier
+engine: easyocr  # paddleocr | ensemble | easyocr | tesseract | mock
 
 # GPU settings
 # auto = tự động detect GPU (khuyến nghị)
 # true = force GPU (lỗi nếu không có GPU)
 # false = force CPU
-gpu: auto
+gpu: true
 
+# EasyOCR languages
+# QUAN TRỌNG: 'en' phải đứng đầu
+# CHỈ THÊM NGÔN NGỮ THỰC SỰ CẦN THIẾT để giảm thời gian load và RAM
+# Mỗi ngôn ngữ thêm vào sẽ tăng ~300MB RAM và ~2s thời gian khởi tạo
 easyocr_langs:
-  - en
-  - fr
-  - de
-  - it
-  - es
-  - pt
-  - ru
-  - ar
-  - ch_sim
-  - ch_tra
-  - ja
-  - ko
-  - th
-  - vi
+  - en       # English (bắt buộc)
+  - fr       # French (phổ biến trên tem EU)
+  - de       # German (phổ biến trên tem EU)
+  - es       # Spanish
+  - ch_sim   # Chinese Simplified (phổ biến trên tem châu Á)
+  - ja       # Japanese (nếu có tem Nhật)
+  # Bỏ comment các ngôn ngữ dưới nếu cần:
+  # - pt       # Portuguese
+  # - it       # Italian
+  # - ru       # Russian
+  # - ar       # Arabic
+  # - ko       # Korean
+  # - ch_tra   # Chinese Traditional
+  # - th       # Thai
+  # - vi       # Vietnamese
 
 # Chỉ verify block khó
 verifier:
