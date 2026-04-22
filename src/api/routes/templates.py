@@ -17,12 +17,25 @@ async def upload_template(
     template_name: str = Form(...),
     product_code: str = Form(...),
     created_by: str = Form(...),
+    ocr_languages_csv: str = Form("en,vi"),  # ADD THIS LINE
     side1_file: Optional[UploadFile] = File(None),
     side2_file: Optional[UploadFile] = File(None),
     combined_file: Optional[UploadFile] = File(None),
     container: ApplicationContainer = Depends(get_container),
 ):
     try:
+        # Parse selected languages from CSV
+        selected_languages = [
+            item.strip()
+            for item in ocr_languages_csv.split(",")
+            if item.strip()
+        ]
+        
+        if not selected_languages:
+            raise ValueError("ocr_languages_csv must contain at least one language")
+        
+        print(f"[DEBUG] Selected OCR languages: {selected_languages}")
+        
         # Validate input: either combined_file OR (side1_file + side2_file)
         if combined_file:
             # Auto-split combined template into side1 and side2
@@ -84,6 +97,7 @@ async def upload_template(
             created_by=created_by,
             side1_file=side1_upload,
             side2_file=side2_upload,
+            ocr_languages=selected_languages,  # ADD THIS LINE
         )
         record = container.template_service.create_draft(payload.to_command())
         return to_primitive(record)

@@ -18,6 +18,28 @@
 
         <label style="margin-top:12px;">Created By</label>
         <input type="text" name="created_by" class="input-sm" value="operator_01" required />
+
+        <label style="margin-top:12px;">OCR Languages (Ctrl+Click to select multiple)</label>
+        <select id="ocr_languages" name="ocr_languages" class="input-sm" multiple size="8" style="height:auto;">
+          <option value="en" selected>English (en)</option>
+          <option value="vi" selected>Vietnamese (vi)</option>
+          <option value="fr">French (fr)</option>
+          <option value="de">German (de)</option>
+          <option value="it">Italian (it)</option>
+          <option value="es">Spanish (es)</option>
+          <option value="pt">Portuguese (pt)</option>
+          <option value="ru">Russian (ru)</option>
+          <option value="ar">Arabic (ar)</option>
+          <option value="ch_sim">Chinese Simplified (ch_sim)</option>
+          <option value="ch_tra">Chinese Traditional (ch_tra)</option>
+          <option value="ja">Japanese (ja)</option>
+          <option value="ko">Korean (ko)</option>
+          <option value="th">Thai (th)</option>
+        </select>
+        <input type="hidden" name="ocr_languages_csv" id="ocr_languages_csv" value="en,vi" />
+        <small style="color:#666; display:block; margin-top:4px;">
+          Select languages on your labels. More = slower but more accurate.
+        </small>
       </div>
 
       <div>
@@ -85,6 +107,16 @@ document.getElementById("template-upload-form").addEventListener("submit", async
 
   const form = e.target;
   const statusBox = document.getElementById("upload-status");
+  
+  // Get selected languages
+  const select = document.getElementById("ocr_languages");
+  const selectedLangs = Array.from(select.selectedOptions).map(opt => opt.value);
+  
+  if (selectedLangs.length === 0) {
+    statusBox.innerHTML = '<span style="color:red;">Please select at least one language</span>';
+    return;
+  }
+  
   statusBox.innerHTML = "Đang upload và OCR...";
 
   const fd = new FormData();
@@ -93,6 +125,7 @@ document.getElementById("template-upload-form").addEventListener("submit", async
   fd.append("template_name", form.template_name.value);
   fd.append("product_code", form.product_code.value);
   fd.append("created_by", form.created_by.value);
+  fd.append("ocr_languages_csv", selectedLangs.join(","));  // ADD THIS LINE
   
   // Add files based on mode
   const mode = document.querySelector('input[name="upload_mode"]:checked').value;

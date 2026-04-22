@@ -214,6 +214,7 @@ class TemplateService:
             document, extracted_fields = self._ocr_workflow.run_template_ocr(
                 side=side,
                 file=upload_file,
+                ocr_languages=upload_request.ocr_languages,  # ADD THIS LINE
             )
             
             # Filter RECTO/VERSO noise blocks

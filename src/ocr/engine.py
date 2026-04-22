@@ -15,6 +15,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -499,32 +500,76 @@ class AutoOCREngine(BaseOCREngine):
         # CACHE: Giữ engines đã tạo để không phải tạo lại
         self._engine_cache: dict[str, BaseOCREngine] = {}
         
+        # THREAD SAFETY: Lock to prevent concurrent engine building
+        self._engine_lock = threading.Lock()
+        
         print(f"[AutoOCR] Initialized: engine={self._preferred_engine}, gpu={self._gpu}, profile={self._default_profile}")
 
     def run(
         self,
         side: InspectionSide,
         file: TemplateUploadFile,
-        profile_name: str | None = None,
+        ocr_languages: list[str] | None = None,  # CHANGE FROM profile_name
     ) -> OCRDocument:
         """
-        Run OCR with optional language profile.
+        Run OCR with optional language list.
         
         Args:
             side: Side1 or Side2
             file: Image file
-            profile_name: Language profile name (e.g., "latin_basic", "cjk")
-                         If None, uses default_profile from config
+            ocr_languages: List of language codes (e.g., ["en", "vi", "fr"])
+                          If None, uses default profile from config
         """
-        profile = profile_name or self._default_profile
-        engine_key = f"{self._preferred_engine}:{profile}"
+        # Use provided languages or fall back to default profile
+        if ocr_languages:
+            langs = [lang.strip() for lang in ocr_languages if lang.strip()]
+            langs = list(dict.fromkeys(langs))  # Remove duplicates while preserving order
+            
+            # CRITICAL: EasyOCR Thai language constraint
+            # Thai ('th') can ONLY be used with English, not with any other languages
+            if 'th' in langs:
+                # If Thai is selected, restrict to only Thai and English
+                langs = ['en', 'th']
+                print("[AutoOCR] Thai detected: restricting language list to ['en', 'th'] (EasyOCR constraint)")
+            else:
+                # IMPORTANT: EasyOCR requires 'en' to be first for certain languages
+                # (ch_tra, ja, ko, ar, etc.)
+                if langs and 'en' in langs:
+                    # Move 'en' to the front
+                    langs.remove('en')
+                    langs.insert(0, 'en')
+                elif langs and 'en' not in langs:
+                    # Add 'en' at the front if not present (required for some languages)
+                    langs.insert(0, 'en')
+        else:
+            # Fallback to default profile
+            langs = self._easyocr_profiles.get(self._default_profile, ["en", "vi"])
         
-        # CACHE: Kiểm tra cache trước
+        if not langs:
+            raise ValueError("ocr_languages must not be empty")
+        
+        # Sort for consistent cache key (but keep 'en' first)
+        en_first = langs[0] == 'en'
+        if en_first:
+            cache_langs = ['en'] + sorted(langs[1:])
+        else:
+            cache_langs = sorted(langs)
+        
+        engine_key = f"{self._preferred_engine}:{','.join(cache_langs)}"
+        
+        # CACHE: Kiểm tra cache trước (thread-safe)
         engine = self._engine_cache.get(engine_key)
         if engine is None:
-            print(f"[AutoOCR] Building new engine: {engine_key}")
-            engine = self._build_engine(self._preferred_engine, profile)
-            self._engine_cache[engine_key] = engine
+            # Use lock to prevent concurrent engine building (especially for model downloads)
+            with self._engine_lock:
+                # Double-check after acquiring lock (another thread might have built it)
+                engine = self._engine_cache.get(engine_key)
+                if engine is None:
+                    print(f"[AutoOCR] Building new engine: {engine_key}")
+                    engine = self._build_engine(self._preferred_engine, cache_langs)
+                    self._engine_cache[engine_key] = engine
+                else:
+                    print(f"[AutoOCR] Using cached engine (built by another thread): {engine_key}")
         else:
             print(f"[AutoOCR] Using cached engine: {engine_key}")
         
@@ -541,13 +586,10 @@ class AutoOCREngine(BaseOCREngine):
             print(f"[AutoOCR] Engine failed, falling back to mock: {exc}")
             return MockOCREngine().run(side=side, file=file)
 
-    def _build_engine(self, engine_name: str, profile_name: str) -> BaseOCREngine:
+    def _build_engine(self, engine_name: str, langs: list[str]) -> BaseOCREngine:
         """
-        Build engine với language profile cụ thể.
+        Build engine với danh sách ngôn ngữ cụ thể.
         """
-        # Lấy danh sách ngôn ngữ từ profile
-        langs = self._easyocr_profiles.get(profile_name, ["en"])
-        
         if engine_name == "easyocr":
             return EasyOCREngine(
                 langs=langs,

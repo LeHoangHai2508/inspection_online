@@ -74,6 +74,7 @@ class TemplateRecord:
     created_by: str
     status: TemplateStatus
     sides: dict[InspectionSide, TemplateSideDefinition]
+    ocr_languages: list[str] = field(default_factory=lambda: ["en", "vi"])
     approved_by: str | None = None
     approved_at: datetime | None = None
     created_at: datetime = field(
@@ -103,6 +104,7 @@ class TemplateUploadRequest:
     side2_fields: list[TemplateFieldDefinition] = field(default_factory=list)
     side1_raw_text: str = ""
     side2_raw_text: str = ""
+    ocr_languages: list[str] = field(default_factory=lambda: ["en", "vi"])
 
 
 @dataclass(frozen=True)

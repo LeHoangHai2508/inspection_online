@@ -23,8 +23,13 @@ class OCRWorkflow:
         self,
         side: InspectionSide,
         file: TemplateUploadFile,
+        ocr_languages: list[str] | None = None,  # ADD THIS PARAMETER
     ) -> tuple[OCRDocument, list]:
-        document = self._engine.run(side=side, file=file)
+        document = self._engine.run(
+            side=side,
+            file=file,
+            ocr_languages=ocr_languages,  # PASS TO ENGINE
+        )
         return document, extract_candidate_fields(side=side, blocks=document.blocks)
 
     def run_capture_ocr(

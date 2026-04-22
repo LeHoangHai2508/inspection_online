@@ -20,6 +20,7 @@ class TemplateUploadPayload:
     created_by: str
     side1_file: TemplateUploadFile
     side2_file: TemplateUploadFile
+    ocr_languages: list[str]  # ADD THIS LINE
 
     def to_command(self) -> TemplateUploadRequest:
         return TemplateUploadRequest(
@@ -28,6 +29,7 @@ class TemplateUploadPayload:
             created_by=self.created_by,
             side1_file=self.side1_file,
             side2_file=self.side2_file,
+            ocr_languages=self.ocr_languages,  # ADD THIS LINE
         )
 
 
