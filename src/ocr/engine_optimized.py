@@ -566,9 +566,11 @@ class AutoOCREngine(BaseOCREngine):
             )
         
         if engine_name == "paddleocr":
+            from paddleocr import PaddleOCR  # type: ignore
             return PaddleOCREngine(lang="en", use_angle_cls=True)
         
         if engine_name == "tesseract":
+            # Tesseract không cần profile vì dùng lang string
             return TesseractOCREngine(lang="eng")
         
         return MockOCREngine()
@@ -606,6 +608,7 @@ class TesseractOCREngine(BaseOCREngine):
                 config=f"--oem 3 --psm 6 -c preserve_interword_spaces=1",
             )
             
+            from src.ocr.parser import parse_tesseract_data
             blocks = parse_tesseract_data(data)
             
             return OCRDocument(

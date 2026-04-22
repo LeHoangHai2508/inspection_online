@@ -4,36 +4,56 @@ engine: easyocr  # paddleocr | ensemble | easyocr | tesseract | mock
 # auto = tự động detect GPU (khuyến nghị)
 # true = force GPU (lỗi nếu không có GPU)
 # false = force CPU
-gpu: true
+gpu: auto
 
-# EasyOCR languages
-# QUAN TRỌNG: 'en' phải đứng đầu
-# CHỈ THÊM NGÔN NGỮ THỰC SỰ CẦN THIẾT để giảm thời gian load và RAM
-# Mỗi ngôn ngữ thêm vào sẽ tăng ~300MB RAM và ~2s thời gian khởi tạo
-easyocr_langs:
-  - en       # English (bắt buộc)
-  - fr       # French (phổ biến trên tem EU)
-  - de       # German (phổ biến trên tem EU)
-  - es       # Spanish
-  - ch_sim   # Chinese Simplified (phổ biến trên tem châu Á)
-  - ja       # Japanese (nếu có tem Nhật)
-  # Bỏ comment các ngôn ngữ dưới nếu cần:
-  # - pt       # Portuguese
-  # - it       # Italian
-  # - ru       # Russian
-  # - ar       # Arabic
-  # - ko       # Korean
-  # - ch_tra   # Chinese Traditional
-  # - th       # Thai
-  # - vi       # Vietnamese
+# EasyOCR Language Profiles
+# Thay vì load tất cả ngôn ngữ cùng lúc, chia thành profiles
+# Mỗi profile chỉ load ngôn ngữ cần thiết → nhanh hơn, ít RAM hơn
+easyocr_profiles:
+  # Profile cơ bản: chỉ Latin + Vietnamese (nhanh nhất)
+  latin_basic:
+    - en
+    - vi
+  
+  # Profile mở rộng: thêm các ngôn ngữ EU phổ biến
+  latin_extended:
+    - en
+    - vi
+    - fr
+    - de
+    - it
+    - es
+    - pt
+  
+  # Profile CJK: Trung/Nhật/Hàn (cần khi có tem châu Á)
+  cjk:
+    - en
+    - ch_sim
+    - ch_tra
+    - ja
+    - ko
+  
+  # Profile Middle East: Arabic
+  middle_east:
+    - en
+    - ar
+  
+  # Profile Southeast Asia: Thai, Vietnamese
+  southeast_asia:
+    - en
+    - vi
+    - th
 
-# Chỉ verify block khó
+# Profile mặc định khi không chỉ định
+default_profile: latin_basic
+
+# Verifier settings (chỉ dùng khi engine: ensemble)
 verifier:
-  enabled: true
-  min_confidence_to_skip: 0.82
+  enabled: false  # Tắt mặc định để nhanh hơn
+  min_confidence_to_skip: 0.60  # Giảm từ 0.82 để verify ít hơn
   min_block_width: 20
   min_block_height: 12
-  max_blocks_per_image: 12
+  max_blocks_per_image: 3  # Giảm từ 12 để nhanh hơn
 
 confidence_threshold: 0.75
 
@@ -42,6 +62,7 @@ confidence_threshold: 0.75
 strict_real_ocr: true
 
 providers:
-  - ensemble
   - easyocr
+  - paddleocr
+  - tesseract
   - mock
